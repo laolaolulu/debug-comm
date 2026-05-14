@@ -10,8 +10,8 @@ use serde::Serialize;
 use serde_json::Value;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, OnceLock, RwLock};
+use tauri::async_runtime;
 use tokio::sync::{broadcast, mpsc};
-use tokio::task::JoinHandle;
 
 /// 工作流实例集合：
 /// key 为工作流 id，value 为工作流实例的强引用。
@@ -55,13 +55,11 @@ impl Workflow {
         // 这里统一使用 StepMsg<Value>，这样消息体既保留结构化 JSON，
         // 又能兼容不同步骤发送的不同类型数据。
         let (tx, _) = broadcast::channel::<StepMsg<Value>>(64);
-        let workflow = Arc::new(Self {
+        Arc::new(Self {
             definition,
             tx,
             steps: RwLock::new(HashMap::new()),
-        });
-        Self::register(&workflow);
-        workflow
+        })
     }
 
     /// 使用前端工作流设计器导出的 JSON 字符串创建工作流实例。
@@ -121,7 +119,7 @@ impl Workflow {
         let edges = self.definition.edges.clone();
         let (filtered_tx, filtered_rx) = mpsc::unbounded_channel::<StepMsg<Value>>();
 
-        let task = tokio::spawn(async move {
+        let task = async_runtime::spawn(async move {
             loop {
                 match rx.recv().await {
                     Ok(step_msg) => {
@@ -215,7 +213,7 @@ impl Workflow {
     }
 
     /// 将新创建的工作流注册到全局实例集合中。
-    fn register(workflow: &Arc<Self>) {
+    pub fn register_running(workflow: &Arc<Self>) {
         if let Ok(mut registry) = workflow_instances().write() {
             registry.insert(workflow.id().to_string(), Arc::clone(workflow));
         }
@@ -350,7 +348,7 @@ pub struct WorkflowSubscription {
     /// 过滤后的消息接收端。
     pub rx: mpsc::UnboundedReceiver<StepMsg<Value>>,
     /// 后台筛选任务句柄，用于主动终止订阅。
-    task: Option<JoinHandle<()>>,
+    task: Option<async_runtime::JoinHandle<()>>,
 }
 
 impl WorkflowSubscription {

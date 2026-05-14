@@ -8,7 +8,7 @@ use std::io::{ErrorKind, Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tokio::task::JoinHandle;
+use tauri::async_runtime::{self, JoinHandle};
 
 /// 串口步骤节点 data 结构。
 /// 该结构会直接对应前端工作流节点中的 data 字段。
@@ -104,7 +104,7 @@ impl SerialPortStep {
         let mut subscription = workflow.subscribe_step(step.id().to_string(), MsgType::Down);
         let writer_for_task = Arc::clone(&writer);
         let running_for_write = Arc::clone(&step.running);
-        let write_task = tokio::spawn(async move {
+        let write_task = async_runtime::spawn(async move {
             while running_for_write.load(Ordering::Relaxed) {
                 let Some(step_msg) = subscription.rx.recv().await else {
                     break;
@@ -125,7 +125,7 @@ impl SerialPortStep {
         let workflow_for_read = Arc::clone(&workflow);
         let step_id = step.id().to_string();
         let running_for_read = Arc::clone(&step.running);
-        let read_task = tokio::task::spawn_blocking(move || {
+        let read_task = async_runtime::spawn_blocking(move || {
             let mut buffer = vec![0_u8; 1024];
             let mut packet_buffer = Vec::<u8>::new();
 

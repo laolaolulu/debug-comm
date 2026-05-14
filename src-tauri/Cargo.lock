@@ -653,7 +653,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "debug-com"
+name = "debug-comm"
 version = "0.1.0"
 dependencies = [
  "serde",

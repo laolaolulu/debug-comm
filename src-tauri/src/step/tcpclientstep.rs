@@ -6,9 +6,9 @@ use crate::step::workflow::Workflow;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use tauri::async_runtime::{self, JoinHandle};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tokio::task::JoinHandle;
 
 /// TCP 客户端步骤节点 data。
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -63,7 +63,7 @@ impl TcpClientStep {
         let workflow_for_task = Arc::clone(&workflow);
         let mut subscription = workflow.subscribe_step(step.id().to_string(), MsgType::Down);
 
-        let task = tokio::spawn(async move {
+        let task = async_runtime::spawn(async move {
             let Ok(mut stream) = TcpStream::connect(&address).await else {
                 return;
             };

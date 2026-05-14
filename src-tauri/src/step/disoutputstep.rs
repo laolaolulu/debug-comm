@@ -6,7 +6,7 @@ use serde_json::Value;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use tokio::task::JoinHandle;
+use tauri::async_runtime::{self, JoinHandle};
 
 /// 接收数据窗口步骤节点 data 结构。
 /// 当前只保留最基础的显示字段。
@@ -67,7 +67,7 @@ impl DisOutputStep {
         let mut subscription = workflow.subscribe_step(step.id().to_string(), MsgType::Down);
         let messages = Arc::clone(&step.messages);
         let running = Arc::clone(&step.running);
-        let receive_task = tokio::spawn(async move {
+        let receive_task = async_runtime::spawn(async move {
             while running.load(Ordering::Relaxed) {
                 let Some(step_msg) = subscription.rx.recv().await else {
                     break;

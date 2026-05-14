@@ -8,10 +8,10 @@ use std::collections::HashMap;
 use std::net::TcpListener as StdTcpListener;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use tauri::async_runtime::{self, JoinHandle};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
 
 /// TCP 服务端步骤节点 data。
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -87,7 +87,7 @@ impl TcpServerStep {
         let clients_for_accept = Arc::clone(&clients);
         let workflow_for_accept = Arc::clone(&workflow);
         let max_read_bytes = data.max_read_bytes.max(1);
-        let accept_task = tokio::spawn(async move {
+        let accept_task = async_runtime::spawn(async move {
             let mut next_client_id = 1_usize;
 
             while running_for_accept.load(Ordering::Relaxed) {
@@ -110,7 +110,7 @@ impl TcpServerStep {
                 let end_flag_for_reader = end_flag.clone();
 
                 // 每个客户端独立读。客户端断开或读取失败时，移除它的写入通道。
-                tokio::spawn(async move {
+                async_runtime::spawn(async move {
                     let mut read_buffer = vec![0_u8; max_read_bytes];
                     let mut packet_buffer = Vec::<u8>::new();
 
@@ -136,7 +136,7 @@ impl TcpServerStep {
                 });
 
                 // 每个客户端独立写，工作流写任务会把 payload 投递到 client_rx。
-                tokio::spawn(async move {
+                async_runtime::spawn(async move {
                     while let Some(payload) = client_rx.recv().await {
                         if writer.write_all(&payload).await.is_err() {
                             break;
@@ -150,7 +150,7 @@ impl TcpServerStep {
         let running_for_write = Arc::clone(&step.running);
         let clients_for_write = Arc::clone(&clients);
         let mut subscription = workflow.subscribe_step(step.id().to_string(), MsgType::Down);
-        let write_task = tokio::spawn(async move {
+        let write_task = async_runtime::spawn(async move {
             while running_for_write.load(Ordering::Relaxed) {
                 let Some(step_msg) = subscription.rx.recv().await else {
                     break;

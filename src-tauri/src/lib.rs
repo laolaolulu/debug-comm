@@ -1,8 +1,8 @@
 pub mod step;
 
-use serialport::available_ports;
 use serde::Serialize;
 use serde_json::Value;
+use serialport::available_ports;
 use step::model::{MsgType, StepMsg, WorkflowDefinition};
 use step::workflow::Workflow;
 use tauri::{AppHandle, Emitter};
@@ -21,9 +21,17 @@ struct WorkflowStepMessage {
 /// Rust 侧完成反序列化并创建工作流实例，同时注册到全局实例集合中。
 #[tauri::command]
 fn start_workflow(app: AppHandle, json: &str) -> Result<String, String> {
+    let (workflow, output_step_ids) = start_workflow_instance(json)?;
+    let workflow_id = workflow.id().to_string();
+
+    spawn_output_step_bridges(app, workflow, output_step_ids);
+
+    Ok(workflow_id)
+}
+
+fn start_workflow_instance(json: &str) -> Result<(std::sync::Arc<Workflow>, Vec<String>), String> {
     let definition =
         serde_json::from_str::<WorkflowDefinition>(json).map_err(|err| err.to_string())?;
-    Workflow::remove(&definition.id);
 
     let output_step_ids = definition
         .nodes
@@ -32,10 +40,21 @@ fn start_workflow(app: AppHandle, json: &str) -> Result<String, String> {
         .map(|node| node.id.clone())
         .collect::<Vec<_>>();
 
+    Workflow::remove(&definition.id);
+
     let workflow = Workflow::new(definition);
     workflow.run()?;
-    let workflow_id = workflow.id().to_string();
+    Workflow::register_running(&workflow);
 
+    Ok((workflow, output_step_ids))
+}
+
+fn spawn_output_step_bridges(
+    app: AppHandle,
+    workflow: std::sync::Arc<Workflow>,
+    output_step_ids: Vec<String>,
+) {
+    let workflow_id = workflow.id().to_string();
     for step_id in output_step_ids {
         let app = app.clone();
         let workflow = workflow.clone();
@@ -62,8 +81,6 @@ fn start_workflow(app: AppHandle, json: &str) -> Result<String, String> {
             }
         });
     }
-
-    Ok(workflow_id)
 }
 
 #[tauri::command]
@@ -108,6 +125,146 @@ fn get_serial_ports() -> Result<Vec<String>, String> {
     available_ports()
         .map(|ports| ports.into_iter().map(|port| port.port_name).collect())
         .map_err(|err| err.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use std::sync::{Mutex, OnceLock};
+
+    fn test_lock() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(())).lock().unwrap()
+    }
+
+    fn workflow_definition(id: &str) -> WorkflowDefinition {
+        serde_json::from_value(json!({
+            "id": id,
+            "name": "test workflow",
+            "nodes": [],
+            "edges": []
+        }))
+        .unwrap()
+    }
+
+    fn workflow_json(id: &str) -> String {
+        json!({
+            "id": id,
+            "name": "test workflow",
+            "nodes": [],
+            "edges": []
+        })
+        .to_string()
+    }
+
+    fn failing_workflow_json(id: &str) -> String {
+        json!({
+            "id": id,
+            "name": "failing workflow",
+            "nodes": [
+                {
+                    "id": "serial-1",
+                    "type": "SerialPortStep",
+                    "position": { "x": 0.0, "y": 0.0 },
+                    "data": {
+                        "name": "Serial"
+                    }
+                }
+            ],
+            "edges": []
+        })
+        .to_string()
+    }
+
+    #[test]
+    fn workflow_new_does_not_register_running_instance() {
+        let _guard = test_lock();
+        let id = "test-new-does-not-register";
+        Workflow::remove(id);
+
+        let workflow = Workflow::new(workflow_definition(id));
+
+        assert!(!Workflow::list_ids().contains(&id.to_string()));
+
+        drop(workflow);
+        Workflow::remove(id);
+    }
+
+    #[test]
+    fn register_running_makes_workflow_queryable() {
+        let _guard = test_lock();
+        let id = "test-register-running";
+        Workflow::remove(id);
+
+        let workflow = Workflow::new(workflow_definition(id));
+        Workflow::register_running(&workflow);
+
+        assert!(Workflow::get(id).is_some());
+        assert!(Workflow::list_ids().contains(&id.to_string()));
+
+        Workflow::remove(id);
+    }
+
+    #[test]
+    fn remove_deletes_running_workflow() {
+        let _guard = test_lock();
+        let id = "test-remove-running";
+        Workflow::remove(id);
+
+        let workflow = Workflow::new(workflow_definition(id));
+        Workflow::register_running(&workflow);
+        Workflow::remove(id);
+
+        assert!(Workflow::get(id).is_none());
+        assert!(!Workflow::list_ids().contains(&id.to_string()));
+    }
+
+    #[test]
+    fn invalid_json_does_not_register_workflow() {
+        let _guard = test_lock();
+        let ids_before = Workflow::list_ids();
+
+        let result = start_workflow_instance("{not valid json");
+
+        assert!(result.is_err());
+        assert_eq!(Workflow::list_ids(), ids_before);
+    }
+
+    #[test]
+    fn failed_start_does_not_register_workflow() {
+        let _guard = test_lock();
+        let id = "test-failed-start";
+        Workflow::remove(id);
+
+        let result = start_workflow_instance(&failing_workflow_json(id));
+
+        assert!(result.is_err());
+        assert!(Workflow::get(id).is_none());
+        assert!(!Workflow::list_ids().contains(&id.to_string()));
+    }
+
+    #[test]
+    fn repeated_start_keeps_single_running_id() {
+        let _guard = test_lock();
+        let id = "test-repeated-start";
+        Workflow::remove(id);
+
+        let first = start_workflow_instance(&workflow_json(id)).unwrap();
+        let second = start_workflow_instance(&workflow_json(id)).unwrap();
+
+        assert_eq!(
+            Workflow::list_ids()
+                .into_iter()
+                .filter(|running_id| running_id == id)
+                .count(),
+            1
+        );
+
+        drop(first);
+        drop(second);
+        Workflow::remove(id);
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
