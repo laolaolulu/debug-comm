@@ -171,6 +171,19 @@ pnpm i18n:extract
 cd src-tauri && cargo test
 ```
 
+## 发布 Release
+
+项目已配置 GitHub Actions 自动发布。推送 `v*` 格式的 tag 后，会自动构建并发布 GitHub Release：
+
+- Windows x64：`msi`
+- macOS x64：`dmg`
+- Linux x64：`deb`
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
 ## 开发备注
 
 - 前端发送数据通过 `publish_step_message` 命令进入后端工作流。
