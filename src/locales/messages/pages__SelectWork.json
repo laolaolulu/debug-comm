@@ -1,0 +1,17 @@
+[
+  {
+    "id": "save.warning",
+    "defaultMessage": "请先保存，或者放弃重置",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\SelectWork.tsx",
+    "start": {
+      "line": 33,
+      "column": 14,
+      "index": 893
+    },
+    "end": {
+      "line": 36,
+      "column": 16,
+      "index": 1006
+    }
+  }
+]

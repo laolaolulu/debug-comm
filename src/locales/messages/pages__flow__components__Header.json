@@ -1,0 +1,287 @@
+[
+  {
+    "id": "flow.header.importSuccess",
+    "defaultMessage": "文件【{name}】导入成功",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\flow\\components\\Header.tsx",
+    "start": {
+      "line": 79,
+      "column": 18,
+      "index": 2626
+    },
+    "end": {
+      "line": 82,
+      "column": 19,
+      "index": 2757
+    }
+  },
+  {
+    "id": "flow.header.invalidWorkflowFile",
+    "defaultMessage": "文件内容不是有效的工作流格式",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\flow\\components\\Header.tsx",
+    "start": {
+      "line": 88,
+      "column": 35,
+      "index": 2925
+    },
+    "end": {
+      "line": 91,
+      "column": 17,
+      "index": 3056
+    }
+  },
+  {
+    "id": "flow.header.parseError",
+    "defaultMessage": "文件解析失败",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\flow\\components\\Header.tsx",
+    "start": {
+      "line": 96,
+      "column": 33,
+      "index": 3175
+    },
+    "end": {
+      "line": 99,
+      "column": 15,
+      "index": 3283
+    }
+  },
+  {
+    "id": "flow.header.invalidJsonFile",
+    "defaultMessage": "文件【{name}】非json格式,已忽略",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\flow\\components\\Header.tsx",
+    "start": {
+      "line": 107,
+      "column": 12,
+      "index": 3445
+    },
+    "end": {
+      "line": 110,
+      "column": 13,
+      "index": 3567
+    }
+  },
+  {
+    "id": "step.save.export",
+    "defaultMessage": "导出",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\flow\\components\\Header.tsx",
+    "start": {
+      "line": 125,
+      "column": 15,
+      "index": 3845
+    },
+    "end": {
+      "line": 125,
+      "column": 77,
+      "index": 3907
+    }
+  },
+  {
+    "id": "step.save.exportDirectory",
+    "defaultMessage": "选择导出文件夹",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\flow\\components\\Header.tsx",
+    "start": {
+      "line": 134,
+      "column": 40,
+      "index": 4158
+    },
+    "end": {
+      "line": 137,
+      "column": 15,
+      "index": 4267
+    }
+  },
+  {
+    "id": "step.save.exportSuccess",
+    "defaultMessage": "已导出：{name}",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\flow\\components\\Header.tsx",
+    "start": {
+      "line": 152,
+      "column": 16,
+      "index": 4747
+    },
+    "end": {
+      "line": 155,
+      "column": 17,
+      "index": 4863
+    }
+  },
+  {
+    "id": "step.save.exportError",
+    "defaultMessage": "导出失败",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\flow\\components\\Header.tsx",
+    "start": {
+      "line": 161,
+      "column": 33,
+      "index": 5024
+    },
+    "end": {
+      "line": 164,
+      "column": 15,
+      "index": 5126
+    }
+  },
+  {
+    "id": "step.save.reset",
+    "defaultMessage": "重置",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\flow\\components\\Header.tsx",
+    "start": {
+      "line": 175,
+      "column": 15,
+      "index": 5347
+    },
+    "end": {
+      "line": 175,
+      "column": 76,
+      "index": 5408
+    }
+  },
+  {
+    "id": "step.save.resetSuccess",
+    "defaultMessage": "已重置：{name}",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\flow\\components\\Header.tsx",
+    "start": {
+      "line": 180,
+      "column": 14,
+      "index": 5527
+    },
+    "end": {
+      "line": 183,
+      "column": 15,
+      "index": 5636
+    }
+  },
+  {
+    "id": "step.save.deleteTemplate",
+    "defaultMessage": "删除模板",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\flow\\components\\Header.tsx",
+    "start": {
+      "line": 193,
+      "column": 10,
+      "index": 5812
+    },
+    "end": {
+      "line": 196,
+      "column": 12,
+      "index": 5921
+    }
+  },
+  {
+    "id": "step.save.deleteWarning",
+    "defaultMessage": "删除警告",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\flow\\components\\Header.tsx",
+    "start": {
+      "line": 203,
+      "column": 38,
+      "index": 6151
+    },
+    "end": {
+      "line": 206,
+      "column": 13,
+      "index": 6252
+    }
+  },
+  {
+    "id": "step.save.deleteConfirm",
+    "defaultMessage": "是否删除标签模板【{name}】",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\flow\\components\\Header.tsx",
+    "start": {
+      "line": 208,
+      "column": 14,
+      "index": 6312
+    },
+    "end": {
+      "line": 211,
+      "column": 15,
+      "index": 6431
+    }
+  },
+  {
+    "id": "step.save.deleteSuccess",
+    "defaultMessage": "已删除：{name}",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\flow\\components\\Header.tsx",
+    "start": {
+      "line": 219,
+      "column": 16,
+      "index": 6644
+    },
+    "end": {
+      "line": 222,
+      "column": 17,
+      "index": 6763
+    }
+  },
+  {
+    "id": "step.create.empty",
+    "defaultMessage": "从空白页",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\flow\\components\\Header.tsx",
+    "start": {
+      "line": 237,
+      "column": 10,
+      "index": 7073
+    },
+    "end": {
+      "line": 237,
+      "column": 75,
+      "index": 7138
+    }
+  },
+  {
+    "id": "step.create.currentTemplate",
+    "defaultMessage": "从当前模板",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\flow\\components\\Header.tsx",
+    "start": {
+      "line": 246,
+      "column": 10,
+      "index": 7326
+    },
+    "end": {
+      "line": 249,
+      "column": 12,
+      "index": 7439
+    }
+  },
+  {
+    "id": "step.create.importFile",
+    "defaultMessage": "从文件导入",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\flow\\components\\Header.tsx",
+    "start": {
+      "line": 267,
+      "column": 12,
+      "index": 7864
+    },
+    "end": {
+      "line": 270,
+      "column": 14,
+      "index": 7978
+    }
+  },
+  {
+    "id": "step.action.new",
+    "defaultMessage": "新建",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\flow\\components\\Header.tsx",
+    "start": {
+      "line": 293,
+      "column": 12,
+      "index": 8476
+    },
+    "end": {
+      "line": 293,
+      "column": 73,
+      "index": 8537
+    }
+  },
+  {
+    "id": "step.action.save",
+    "defaultMessage": "保存",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\flow\\components\\Header.tsx",
+    "start": {
+      "line": 305,
+      "column": 10,
+      "index": 8814
+    },
+    "end": {
+      "line": 305,
+      "column": 72,
+      "index": 8876
+    }
+  }
+]

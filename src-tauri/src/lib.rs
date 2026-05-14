@@ -1,0 +1,130 @@
+pub mod step;
+
+use serialport::available_ports;
+use serde::Serialize;
+use serde_json::Value;
+use step::model::{MsgType, StepMsg, WorkflowDefinition};
+use step::workflow::Workflow;
+use tauri::{AppHandle, Emitter};
+
+#[derive(Clone, Serialize)]
+struct WorkflowStepMessage {
+    workflow_id: String,
+    step_id: String,
+    source_step_id: String,
+    action: MsgType,
+    msg: Value,
+}
+
+/// 启动工作流：
+/// 前端传入工作流设计器导出的 JSON 字符串，
+/// Rust 侧完成反序列化并创建工作流实例，同时注册到全局实例集合中。
+#[tauri::command]
+fn start_workflow(app: AppHandle, json: &str) -> Result<String, String> {
+    let definition =
+        serde_json::from_str::<WorkflowDefinition>(json).map_err(|err| err.to_string())?;
+    Workflow::remove(&definition.id);
+
+    let output_step_ids = definition
+        .nodes
+        .iter()
+        .filter(|node| node.r#type.eq_ignore_ascii_case("disoutputstep"))
+        .map(|node| node.id.clone())
+        .collect::<Vec<_>>();
+
+    let workflow = Workflow::new(definition);
+    workflow.run()?;
+    let workflow_id = workflow.id().to_string();
+
+    for step_id in output_step_ids {
+        let app = app.clone();
+        let workflow = workflow.clone();
+        let workflow_id = workflow_id.clone();
+        tauri::async_runtime::spawn(async move {
+            let mut subscription = workflow.subscribe_step(step_id.clone(), MsgType::Down);
+            drop(workflow);
+            while let Some(StepMsg {
+                step_id: source_step_id,
+                action,
+                msg,
+            }) = subscription.rx.recv().await
+            {
+                let _ = app.emit(
+                    "workflow-step-message",
+                    WorkflowStepMessage {
+                        workflow_id: workflow_id.clone(),
+                        step_id: step_id.clone(),
+                        source_step_id,
+                        action,
+                        msg,
+                    },
+                );
+            }
+        });
+    }
+
+    Ok(workflow_id)
+}
+
+#[tauri::command]
+fn publish_step_message(workflow_id: &str, step_id: &str, msg: Value) -> Result<(), String> {
+    let workflow =
+        Workflow::get(workflow_id).ok_or_else(|| format!("workflow not found: {workflow_id}"))?;
+    workflow.publish(step_id.to_string(), MsgType::Down, msg)?;
+    Ok(())
+}
+
+/// 停止工作流：
+/// 前端传入工作流 id，
+/// Rust 侧从全局实例集合中移除对应实例，移除后如果没有其他引用，实例会被自动销毁。
+#[tauri::command]
+fn stop_workflow(id: &str) -> Result<(), String> {
+    if Workflow::get(id).is_none() {
+        return Err(format!("workflow not found: {id}"));
+    }
+
+    Workflow::remove(id);
+    Ok(())
+}
+
+/// 获取当前所有执行中的工作流 id 集合。
+/// 数据来源就是当前进程中的全局工作流实例集合。
+#[tauri::command]
+fn get_workflow_ids() -> Vec<String> {
+    Workflow::list_ids()
+}
+
+/// 获取所有可创建的步骤类型定义。
+/// 前端 StepList 可直接使用该数据生成拖拽列表。
+#[tauri::command]
+fn get_step_manifests() -> serde_json::Value {
+    serde_json::to_value(Workflow::available_steps()).unwrap_or_default()
+}
+
+/// 查询当前系统可用串口列表。
+/// 前端可用于串口步骤的下拉选择，同时仍允许用户手动输入。
+#[tauri::command]
+fn get_serial_ports() -> Result<Vec<String>, String> {
+    available_ports()
+        .map(|ports| ports.into_iter().map(|port| port.port_name).collect())
+        .map_err(|err| err.to_string())
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_store::Builder::default().build())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
+        .invoke_handler(tauri::generate_handler![
+            start_workflow,
+            stop_workflow,
+            publish_step_message,
+            get_workflow_ids,
+            get_step_manifests,
+            get_serial_ports
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}

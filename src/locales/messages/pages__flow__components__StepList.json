@@ -1,0 +1,32 @@
+[
+  {
+    "id": "step.list.title",
+    "defaultMessage": "工作流节点",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\flow\\components\\StepList.tsx",
+    "start": {
+      "line": 104,
+      "column": 10,
+      "index": 2991
+    },
+    "end": {
+      "line": 104,
+      "column": 74,
+      "index": 3055
+    }
+  },
+  {
+    "id": "step.list.count",
+    "defaultMessage": "{count} 个类型",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\flow\\components\\StepList.tsx",
+    "start": {
+      "line": 107,
+      "column": 10,
+      "index": 3136
+    },
+    "end": {
+      "line": 111,
+      "column": 12,
+      "index": 3285
+    }
+  }
+]

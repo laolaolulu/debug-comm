@@ -1,0 +1,32 @@
+[
+  {
+    "id": "menu.workbench",
+    "defaultMessage": "工作台",
+    "file": "E:\\lipeng\\debug-com\\src\\App.tsx",
+    "start": {
+      "line": 51,
+      "column": 16,
+      "index": 1416
+    },
+    "end": {
+      "line": 51,
+      "column": 77,
+      "index": 1477
+    }
+  },
+  {
+    "id": "menu.designer",
+    "defaultMessage": "设计器",
+    "file": "E:\\lipeng\\debug-com\\src\\App.tsx",
+    "start": {
+      "line": 58,
+      "column": 16,
+      "index": 1635
+    },
+    "end": {
+      "line": 58,
+      "column": 76,
+      "index": 1695
+    }
+  }
+]

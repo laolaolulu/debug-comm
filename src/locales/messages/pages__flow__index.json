@@ -1,0 +1,77 @@
+[
+  {
+    "id": "node.type.DisInputStep",
+    "defaultMessage": "发送数据窗口",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\flow\\index.tsx",
+    "start": {
+      "line": 12,
+      "column": 16,
+      "index": 443
+    },
+    "end": {
+      "line": 15,
+      "column": 3,
+      "index": 515
+    }
+  },
+  {
+    "id": "node.type.DisOutputStep",
+    "defaultMessage": "接收数据窗口",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\flow\\index.tsx",
+    "start": {
+      "line": 16,
+      "column": 17,
+      "index": 535
+    },
+    "end": {
+      "line": 19,
+      "column": 3,
+      "index": 608
+    }
+  },
+  {
+    "id": "node.type.SerialPortStep",
+    "defaultMessage": "串口通信",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\flow\\index.tsx",
+    "start": {
+      "line": 20,
+      "column": 18,
+      "index": 629
+    },
+    "end": {
+      "line": 23,
+      "column": 3,
+      "index": 701
+    }
+  },
+  {
+    "id": "node.type.TcpClientStep",
+    "defaultMessage": "TCP 客户端",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\flow\\index.tsx",
+    "start": {
+      "line": 24,
+      "column": 17,
+      "index": 721
+    },
+    "end": {
+      "line": 27,
+      "column": 3,
+      "index": 795
+    }
+  },
+  {
+    "id": "node.type.TcpServerStep",
+    "defaultMessage": "TCP 服务端",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\flow\\index.tsx",
+    "start": {
+      "line": 28,
+      "column": 17,
+      "index": 815
+    },
+    "end": {
+      "line": 31,
+      "column": 3,
+      "index": 889
+    }
+  }
+]

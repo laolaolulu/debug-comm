@@ -1,0 +1,77 @@
+[
+  {
+    "id": "work.message.stopped",
+    "defaultMessage": "任务已停止：{workflowId}",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\work\\components\\Header.tsx",
+    "start": {
+      "line": 35,
+      "column": 20,
+      "index": 1417
+    },
+    "end": {
+      "line": 38,
+      "column": 21,
+      "index": 1553
+    }
+  },
+  {
+    "id": "work.action.stop",
+    "defaultMessage": "停止",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\work\\components\\Header.tsx",
+    "start": {
+      "line": 47,
+      "column": 12,
+      "index": 1784
+    },
+    "end": {
+      "line": 47,
+      "column": 74,
+      "index": 1846
+    }
+  },
+  {
+    "id": "work.message.started",
+    "defaultMessage": "任务已启动：{workflowId}",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\work\\components\\Header.tsx",
+    "start": {
+      "line": 63,
+      "column": 20,
+      "index": 2380
+    },
+    "end": {
+      "line": 66,
+      "column": 21,
+      "index": 2516
+    }
+  },
+  {
+    "id": "work.action.start",
+    "defaultMessage": "启动",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\work\\components\\Header.tsx",
+    "start": {
+      "line": 75,
+      "column": 12,
+      "index": 2736
+    },
+    "end": {
+      "line": 75,
+      "column": 75,
+      "index": 2799
+    }
+  },
+  {
+    "id": "work.action.settings",
+    "defaultMessage": "设置",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\work\\components\\Header.tsx",
+    "start": {
+      "line": 82,
+      "column": 10,
+      "index": 2959
+    },
+    "end": {
+      "line": 82,
+      "column": 76,
+      "index": 3025
+    }
+  }
+]

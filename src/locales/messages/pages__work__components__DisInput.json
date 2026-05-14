@@ -1,0 +1,92 @@
+[
+  {
+    "id": "work.input.placeholder.text",
+    "defaultMessage": "请输入发送内容",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\work\\components\\DisInput.tsx",
+    "start": {
+      "line": 67,
+      "column": 33,
+      "index": 1694
+    },
+    "end": {
+      "line": 70,
+      "column": 15,
+      "index": 1805
+    }
+  },
+  {
+    "id": "work.input.error.hexOddLength",
+    "defaultMessage": "HEX 长度必须是偶数",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\work\\components\\DisInput.tsx",
+    "start": {
+      "line": 104,
+      "column": 56,
+      "index": 2892
+    },
+    "end": {
+      "line": 107,
+      "column": 27,
+      "index": 3045
+    }
+  },
+  {
+    "id": "work.input.error.invalidHexByte",
+    "defaultMessage": "非法 HEX 字节：{part}",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\work\\components\\DisInput.tsx",
+    "start": {
+      "line": 110,
+      "column": 30,
+      "index": 3175
+    },
+    "end": {
+      "line": 113,
+      "column": 31,
+      "index": 3347
+    }
+  },
+  {
+    "id": "work.input.sent",
+    "defaultMessage": "已发送",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\work\\components\\DisInput.tsx",
+    "start": {
+      "line": 120,
+      "column": 37,
+      "index": 3568
+    },
+    "end": {
+      "line": 123,
+      "column": 19,
+      "index": 3675
+    }
+  },
+  {
+    "id": "work.input.send",
+    "defaultMessage": "发送",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\work\\components\\DisInput.tsx",
+    "start": {
+      "line": 130,
+      "column": 12,
+      "index": 3830
+    },
+    "end": {
+      "line": 130,
+      "column": 73,
+      "index": 3891
+    }
+  },
+  {
+    "id": "work.input.noNodes",
+    "defaultMessage": "暂无输入节点",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\work\\components\\DisInput.tsx",
+    "start": {
+      "line": 147,
+      "column": 40,
+      "index": 4289
+    },
+    "end": {
+      "line": 150,
+      "column": 9,
+      "index": 4372
+    }
+  }
+]

@@ -1,0 +1,62 @@
+[
+  {
+    "id": "work.output.placeholder.hex",
+    "defaultMessage": "等待接收 HEX 数据",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\work\\components\\DisOutput.tsx",
+    "start": {
+      "line": 67,
+      "column": 27,
+      "index": 1616
+    },
+    "end": {
+      "line": 70,
+      "column": 9,
+      "index": 1716
+    }
+  },
+  {
+    "id": "work.output.placeholder.text",
+    "defaultMessage": "等待接收数据",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\work\\components\\DisOutput.tsx",
+    "start": {
+      "line": 71,
+      "column": 27,
+      "index": 1746
+    },
+    "end": {
+      "line": 74,
+      "column": 9,
+      "index": 1842
+    }
+  },
+  {
+    "id": "work.output.clear",
+    "defaultMessage": "清空",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\work\\components\\DisOutput.tsx",
+    "start": {
+      "line": 104,
+      "column": 12,
+      "index": 2732
+    },
+    "end": {
+      "line": 104,
+      "column": 75,
+      "index": 2795
+    }
+  },
+  {
+    "id": "work.output.noNodes",
+    "defaultMessage": "暂无接收节点",
+    "file": "E:\\lipeng\\debug-com\\src\\pages\\work\\components\\DisOutput.tsx",
+    "start": {
+      "line": 155,
+      "column": 40,
+      "index": 4085
+    },
+    "end": {
+      "line": 158,
+      "column": 9,
+      "index": 4172
+    }
+  }
+]
