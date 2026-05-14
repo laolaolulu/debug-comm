@@ -1,5 +1,5 @@
 use crate::step::basestep::{BaseStep, BaseStepContext, StepManifestProvider};
-use crate::step::model::{MsgType, StepManifest, StepMsg, WorkflowNode};
+use crate::step::model::{StepManifest, StepMsg, WorkflowNode};
 use crate::step::workflow::Workflow;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -64,7 +64,7 @@ impl DisOutputStep {
 
         // 接收窗口作为链路末端，默认订阅上游发来的 Down 消息。
         // 当前只做内存缓存；如果后续需要实时 UI，可在这里增加 app_handle.emit。
-        let mut subscription = workflow.subscribe_step(step.id().to_string(), MsgType::Down);
+        let mut subscription = workflow.subscribe_step_related(step.id().to_string());
         let messages = Arc::clone(&step.messages);
         let running = Arc::clone(&step.running);
         let receive_task = async_runtime::spawn(async move {

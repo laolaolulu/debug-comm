@@ -122,7 +122,7 @@ impl SerialPortStep {
             }
         });
 
-        let workflow_for_read = Arc::clone(&workflow);
+        let workflow_for_read = Arc::downgrade(&workflow);
         let step_id = step.id().to_string();
         let running_for_read = Arc::clone(&step.running);
         let read_task = async_runtime::spawn_blocking(move || {
@@ -142,16 +142,19 @@ impl SerialPortStep {
                                 let packet_end = index + flag.len();
                                 let payload = packet_buffer[..packet_end].to_vec();
                                 packet_buffer.drain(..packet_end);
-                                let _ = workflow_for_read.publish(
-                                    step_id.clone(),
-                                    MsgType::Up,
-                                    payload,
-                                );
+                                if let Some(workflow) = workflow_for_read.upgrade() {
+                                    let _ = workflow.publish(step_id.clone(), MsgType::Up, payload);
+                                } else {
+                                    return;
+                                }
                             }
                         } else {
                             let payload = received.to_vec();
-                            let _ =
-                                workflow_for_read.publish(step_id.clone(), MsgType::Up, payload);
+                            if let Some(workflow) = workflow_for_read.upgrade() {
+                                let _ = workflow.publish(step_id.clone(), MsgType::Up, payload);
+                            } else {
+                                return;
+                            }
                         }
                     }
                     Ok(_) => continue,

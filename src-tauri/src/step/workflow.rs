@@ -97,6 +97,13 @@ impl Workflow {
         Ok(())
     }
 
+    /// Explicitly drop all step instances so their background tasks and sockets are aborted.
+    pub fn shutdown(&self) {
+        if let Ok(mut current_steps) = self.steps.write() {
+            current_steps.clear();
+        }
+    }
+
     /// 订阅当前工作流的广播消息。
     /// 每次调用都会返回一个新的接收端，用于监听后续发布的消息。
     pub fn subscribe(&self) -> broadcast::Receiver<StepMsg<Value>> {
@@ -136,6 +143,40 @@ impl Workflow {
                             if filtered_tx.send(step_msg).is_err() {
                                 break;
                             }
+                        }
+                    }
+                    Err(broadcast::error::RecvError::Closed) => break,
+                    Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                }
+            }
+        });
+
+        WorkflowSubscription {
+            rx: filtered_rx,
+            task: Some(task),
+        }
+    }
+
+    /// Subscribe to any message published by a step directly connected to `step_id`.
+    ///
+    /// This is used by display/output steps: communication steps publish received data as
+    /// `Up`, but users may place the display node on either side of the communication node
+    /// in the designer. For display purposes the important relation is adjacency, not flow
+    /// direction.
+    pub fn subscribe_step_related(&self, step_id: impl Into<String>) -> WorkflowSubscription {
+        let current_step_id = step_id.into();
+        let mut rx = self.subscribe();
+        let edges = self.definition.edges.clone();
+        let (filtered_tx, filtered_rx) = mpsc::unbounded_channel::<StepMsg<Value>>();
+
+        let task = async_runtime::spawn(async move {
+            loop {
+                match rx.recv().await {
+                    Ok(step_msg) => {
+                        if Self::match_step_adjacency(&edges, &current_step_id, &step_msg.step_id)
+                            && filtered_tx.send(step_msg).is_err()
+                        {
+                            break;
                         }
                     }
                     Err(broadcast::error::RecvError::Closed) => break,
@@ -209,6 +250,9 @@ impl Workflow {
             .write()
             .ok()
             .and_then(|mut registry| registry.remove(id));
+        if let Some(workflow) = removed.as_ref() {
+            workflow.shutdown();
+        }
         drop(removed);
     }
 
@@ -331,6 +375,17 @@ impl Workflow {
             MsgType::Down => edge.source == message_step_id && edge.target == current_step_id,
         })
     }
+
+    fn match_step_adjacency(
+        edges: &[WorkflowEdge],
+        current_step_id: &str,
+        message_step_id: &str,
+    ) -> bool {
+        edges.iter().any(|edge| {
+            (edge.source == current_step_id && edge.target == message_step_id)
+                || (edge.source == message_step_id && edge.target == current_step_id)
+        })
+    }
 }
 
 /// 工作流实例销毁时，自动从全局集合中注销。
@@ -369,5 +424,45 @@ impl WorkflowSubscription {
 impl Drop for WorkflowSubscription {
     fn drop(&mut self) {
         self.cancel();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn edge(source: &str, target: &str) -> WorkflowEdge {
+        WorkflowEdge {
+            id: None,
+            source: source.to_string(),
+            target: target.to_string(),
+            extra: HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn adjacency_matches_either_edge_direction() {
+        let edges = vec![edge("tcp", "output"), edge("reverse-output", "serial")];
+
+        assert!(Workflow::match_step_adjacency(&edges, "output", "tcp"));
+        assert!(Workflow::match_step_adjacency(
+            &edges,
+            "reverse-output",
+            "serial"
+        ));
+        assert!(!Workflow::match_step_adjacency(&edges, "output", "input"));
+    }
+
+    #[test]
+    fn down_relation_does_not_match_up_receive_topology() {
+        let edges = vec![edge("tcp", "output")];
+
+        assert!(!Workflow::match_step_relation(
+            &edges,
+            "output",
+            "tcp",
+            &MsgType::Up
+        ));
+        assert!(Workflow::match_step_adjacency(&edges, "output", "tcp"));
     }
 }

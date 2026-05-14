@@ -15,17 +15,34 @@ import { useState } from "react";
 import { FormattedMessage, useIntl } from "react-intl";
 import { useWorkflowStore } from "../../../models/workflow";
 
+type InputMode = "utf-8" | "hex";
+
+const HEX_SEPARATOR_PATTERN = /[\s,;:\-_]/g;
+const HEX_ALLOWED_PATTERN = /[^0-9a-fA-F\s,;:\-_]/g;
+
+const bytesToHexInput = (bytes: Uint8Array | number[]) =>
+  [...bytes]
+    .map((byte) => byte.toString(16).padStart(2, "0").toUpperCase())
+    .join(" ");
+
+const sanitizeHexInput = (value: string) =>
+  value.replace(HEX_ALLOWED_PATTERN, "");
+
 const parseHex = (
   value: string,
   messages: { oddLength: string; invalidByte: (part: string) => string },
 ) => {
-  const normalized = value.replace(/[\s,-]/g, "");
+  const normalized = value.replace(HEX_SEPARATOR_PATTERN, "");
   if (!normalized) {
     return [];
   }
   if (normalized.length % 2 !== 0) {
     throw new Error(messages.oddLength);
   }
+  if (!/^[0-9a-fA-F]+$/.test(normalized)) {
+    throw new Error(messages.invalidByte(normalized));
+  }
+
   return (
     normalized.match(/.{2}/g)?.map((part) => {
       const byte = Number.parseInt(part, 16);
@@ -37,12 +54,48 @@ const parseHex = (
   );
 };
 
+const decodeHex = (
+  value: string,
+  messages: { oddLength: string; invalidByte: (part: string) => string },
+) => new TextDecoder().decode(new Uint8Array(parseHex(value, messages)));
+
 function InputPanel({ node }: { node: WorkflowNode }) {
   const { message } = App.useApp();
   const select = useWorkflowStore((state) => state.select);
   const intl = useIntl();
-  const [mode, setMode] = useState<"utf-8" | "hex">("utf-8");
+  const [mode, setMode] = useState<InputMode>("utf-8");
   const [value, setValue] = useState("");
+  const hexMessages = {
+    oddLength: intl.formatMessage({
+      id: "work.input.error.hexOddLength",
+      defaultMessage: "HEX 长度必须是偶数",
+    }),
+    invalidByte: (part: string) =>
+      intl.formatMessage(
+        {
+          id: "work.input.error.invalidHexByte",
+          defaultMessage: "非法 HEX 字节：{part}",
+        },
+        { part },
+      ),
+  };
+
+  const switchMode = (next: InputMode) => {
+    if (next === mode) {
+      return;
+    }
+
+    try {
+      if (next === "hex") {
+        setValue(bytesToHexInput(new TextEncoder().encode(value)));
+      } else {
+        setValue(decodeHex(value, hexMessages));
+      }
+      setMode(next);
+    } catch (error) {
+      message.error(String(error));
+    }
+  };
 
   return (
     <div
@@ -54,7 +107,7 @@ function InputPanel({ node }: { node: WorkflowNode }) {
         padding: "10px 12px",
         background: "#fff",
         border: "1px solid #d9d9d9",
-        borderRadius: 15,
+        borderRadius: 8,
         boxShadow: "0 1px 4px rgba(15, 23, 42, 0.04)",
       }}
     >
@@ -63,13 +116,19 @@ function InputPanel({ node }: { node: WorkflowNode }) {
         value={value}
         placeholder={
           mode === "hex"
-            ? "AA 01 FF"
+            ? "A1 B2 C3 或 A1-B2-C3"
             : intl.formatMessage({
                 id: "work.input.placeholder.text",
                 defaultMessage: "请输入发送内容",
               })
         }
-        onChange={(event) => setValue(event.target.value)}
+        onChange={(event) =>
+          setValue(
+            mode === "hex"
+              ? sanitizeHexInput(event.target.value)
+              : event.target.value,
+          )
+        }
         style={{ flex: 1, padding: 0, resize: "none" }}
       />
 
@@ -84,7 +143,7 @@ function InputPanel({ node }: { node: WorkflowNode }) {
           <Segmented
             value={mode}
             options={["utf-8", "hex"]}
-            onChange={(next) => setMode(next as "utf-8" | "hex")}
+            onChange={(next) => switchMode(next as InputMode)}
           />
           <Button
             type="primary"
@@ -98,23 +157,7 @@ function InputPanel({ node }: { node: WorkflowNode }) {
                 await invoke("publish_step_message", {
                   workflowId: select.id,
                   stepId: node.id,
-                  msg:
-                    mode === "hex"
-                      ? parseHex(value, {
-                          oddLength: intl.formatMessage({
-                            id: "work.input.error.hexOddLength",
-                            defaultMessage: "HEX 长度必须是偶数",
-                          }),
-                          invalidByte: (part) =>
-                            intl.formatMessage(
-                              {
-                                id: "work.input.error.invalidHexByte",
-                                defaultMessage: "非法 HEX 字节：{part}",
-                              },
-                              { part },
-                            ),
-                        })
-                      : value,
+                  msg: mode === "hex" ? parseHex(value, hexMessages) : value,
                 });
                 message.success(
                   intl.formatMessage({
@@ -138,7 +181,7 @@ function InputPanel({ node }: { node: WorkflowNode }) {
 export default () => {
   const select = useWorkflowStore((state) => state.select);
   const intl = useIntl();
-  const nodes = select?.nodes.filter((f) => f.type === "DisInputStep") ?? [];
+  const nodes = select?.nodes.filter((node) => node.type === "DisInputStep") ?? [];
 
   if (nodes.length === 0) {
     return (

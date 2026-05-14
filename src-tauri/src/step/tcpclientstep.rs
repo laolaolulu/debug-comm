@@ -60,7 +60,7 @@ impl TcpClientStep {
         let address = format!("{}:{}", data.host, data.port);
         let step_id = step.id().to_string();
         let running = Arc::clone(&step.running);
-        let workflow_for_task = Arc::clone(&workflow);
+        let workflow_for_task = Arc::downgrade(&workflow);
         let mut subscription = workflow.subscribe_step(step.id().to_string(), MsgType::Down);
 
         let task = async_runtime::spawn(async move {
@@ -91,13 +91,17 @@ impl TcpClientStep {
                             Ok(0) => break,
                             Ok(size) => {
                                 let received = &read_buffer[..size];
-                                Self::publish_received(
-                                    &workflow_for_task,
-                                    &step_id,
-                                    &mut packet_buffer,
-                                    end_flag.as_deref(),
-                                    received,
-                                );
+                                if let Some(workflow) = workflow_for_task.upgrade() {
+                                    Self::publish_received(
+                                        &workflow,
+                                        &step_id,
+                                        &mut packet_buffer,
+                                        end_flag.as_deref(),
+                                        received,
+                                    );
+                                } else {
+                                    break;
+                                }
                             }
                             Err(_) => break,
                         }

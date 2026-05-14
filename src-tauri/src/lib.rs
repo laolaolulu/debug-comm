@@ -1,20 +1,13 @@
+mod receive_log;
 pub mod step;
 
-use serde::Serialize;
+use receive_log::{append_record, clear_records, create_record, read_records, ReceiveLogRecord};
 use serde_json::Value;
 use serialport::available_ports;
+use std::path::PathBuf;
 use step::model::{MsgType, StepMsg, WorkflowDefinition};
 use step::workflow::Workflow;
-use tauri::{AppHandle, Emitter};
-
-#[derive(Clone, Serialize)]
-struct WorkflowStepMessage {
-    workflow_id: String,
-    step_id: String,
-    source_step_id: String,
-    action: MsgType,
-    msg: Value,
-}
+use tauri::{AppHandle, Emitter, Manager};
 
 /// 启动工作流：
 /// 前端传入工作流设计器导出的 JSON 字符串，
@@ -60,24 +53,27 @@ fn spawn_output_step_bridges(
         let workflow = workflow.clone();
         let workflow_id = workflow_id.clone();
         tauri::async_runtime::spawn(async move {
-            let mut subscription = workflow.subscribe_step(step_id.clone(), MsgType::Down);
+            let mut subscription = workflow.subscribe_step_related(step_id.clone());
             drop(workflow);
             while let Some(StepMsg {
                 step_id: source_step_id,
-                action,
                 msg,
+                ..
             }) = subscription.rx.recv().await
             {
-                let _ = app.emit(
-                    "workflow-step-message",
-                    WorkflowStepMessage {
-                        workflow_id: workflow_id.clone(),
-                        step_id: step_id.clone(),
-                        source_step_id,
-                        action,
-                        msg,
-                    },
-                );
+                let record =
+                    create_record(workflow_id.clone(), step_id.clone(), source_step_id, msg);
+                match receive_log_base_dir(&app)
+                    .and_then(|base_dir| append_record(&base_dir, &record))
+                {
+                    Ok(()) => {
+                        let _ = app.emit("workflow-step-message", record);
+                    }
+                    Err(err) => {
+                        eprintln!("failed to persist receive log: {err}");
+                        let _ = app.emit("workflow-step-message", record);
+                    }
+                }
             }
         });
     }
@@ -125,6 +121,28 @@ fn get_serial_ports() -> Result<Vec<String>, String> {
     available_ports()
         .map(|ports| ports.into_iter().map(|port| port.port_name).collect())
         .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn get_receive_logs(
+    app: AppHandle,
+    workflow_id: &str,
+    step_id: &str,
+    before: Option<String>,
+    limit: Option<usize>,
+) -> Result<Vec<ReceiveLogRecord>, String> {
+    let base_dir = receive_log_base_dir(&app)?;
+    read_records(&base_dir, workflow_id, step_id, before.as_deref(), limit)
+}
+
+#[tauri::command]
+fn clear_receive_logs(app: AppHandle, workflow_id: &str, step_id: &str) -> Result<(), String> {
+    let base_dir = receive_log_base_dir(&app)?;
+    clear_records(&base_dir, workflow_id, step_id)
+}
+
+fn receive_log_base_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    app.path().app_data_dir().map_err(|err| err.to_string())
 }
 
 #[cfg(test)]
@@ -279,6 +297,8 @@ pub fn run() {
             stop_workflow,
             publish_step_message,
             get_workflow_ids,
+            get_receive_logs,
+            clear_receive_logs,
             get_step_manifests,
             get_serial_ports
         ])
