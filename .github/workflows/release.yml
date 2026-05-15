@@ -62,7 +62,7 @@ jobs:
             args: --bundles msi
 
           - name: macOS x64
-            os: macos-13
+            os: macos-latest
             args: --bundles dmg
 
           - name: Linux x64 deb

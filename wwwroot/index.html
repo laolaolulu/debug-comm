@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="debug-comm 是一款开源的桌面通信调试工具，支持串口、TCP 客户端、TCP 服务端、发送窗口、接收日志和可视化工作流。"
+    />
+    <title>debug-comm - 开源通信调试工具</title>
+    <link rel="icon" href="./assets/logo.svg" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="debug-comm 首页">
+        <img src="./assets/logo.svg" alt="" />
+        <span>debug-comm</span>
+      </a>
+      <button class="menu-toggle" type="button" aria-label="打开导航" aria-expanded="false">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+      <nav class="site-nav" aria-label="主导航">
+        <a href="#features">功能特性</a>
+        <a href="#workflow">工作流</a>
+        <a href="#download">下载</a>
+        <a href="#faq">FAQ</a>
+        <a class="nav-cta" href="https://github.com/laolaolulu/debug-comm" target="_blank" rel="noreferrer">GitHub</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <div class="hero-copy">
+          <a class="release-pill" href="https://github.com/laolaolulu/debug-comm/releases" target="_blank" rel="noreferrer">
+            v0.1.0 开源版本已发布
+          </a>
+          <h1>面向串口与 TCP 的可视化通信调试工具</h1>
+          <p>
+            用工作流组织通信链路，拖拽节点、连接数据流、启动任务，然后在一个清晰的桌面应用里发送数据、查看接收日志、定位协议问题。
+          </p>
+          <div class="hero-actions">
+            <a class="primary-btn" href="#download">获取客户端</a>
+            <a class="secondary-btn" href="https://github.com/laolaolulu/debug-comm" target="_blank" rel="noreferrer">查看源码</a>
+          </div>
+          <dl class="hero-stats" aria-label="项目能力概览">
+            <div>
+              <dt>5+</dt>
+              <dd>通信节点</dd>
+            </div>
+            <div>
+              <dt>2</dt>
+              <dd>输入模式</dd>
+            </div>
+            <div>
+              <dt>MIT</dt>
+              <dd>开源协议</dd>
+            </div>
+          </dl>
+        </div>
+        <div class="hero-visual" aria-label="debug-comm 工作台界面示意">
+          <div class="app-shell">
+            <div class="window-bar">
+              <span></span>
+              <span></span>
+              <span></span>
+              <strong>Debug Workflow</strong>
+            </div>
+            <div class="canvas">
+              <div class="node send">
+                <small>发送窗口</small>
+                <strong>A1 B2 C3</strong>
+              </div>
+              <div class="node serial">
+                <small>串口通信</small>
+                <strong>COM3 · 115200</strong>
+              </div>
+              <div class="node tcp">
+                <small>TCP 服务端</small>
+                <strong>0.0.0.0:9000</strong>
+              </div>
+              <div class="node receive">
+                <small>接收日志</small>
+                <strong>128 bytes</strong>
+              </div>
+              <svg class="links" viewBox="0 0 620 330" aria-hidden="true">
+                <path d="M166 95 C242 95 244 166 320 166" />
+                <path d="M410 166 C474 166 478 82 540 82" />
+                <path d="M410 166 C470 166 474 248 542 248" />
+              </svg>
+            </div>
+            <div class="log-dock">
+              <span>18:42:09</span>
+              <code>RX TCP-Server &lt;- A1 B2 C3 0D 0A</code>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="features">
+        <div class="section-heading">
+          <span>Features</span>
+          <h2>为什么选择 debug-comm？</h2>
+          <p>它把常见通信调试动作拆成可组合节点，让一次调试变成可保存、可复用、可追踪的工作流。</p>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-card">
+            <div class="icon">↔</div>
+            <h3>可视化工作流</h3>
+            <p>基于节点和连线组织发送、通信与接收路径，适合反复验证设备协议和 TCP 链路。</p>
+          </article>
+          <article class="feature-card">
+            <div class="icon">⌁</div>
+            <h3>串口通信</h3>
+            <p>支持串口号、波特率、数据位、停止位、校验位、流控和结束符等常用参数。</p>
+          </article>
+          <article class="feature-card">
+            <div class="icon">⇄</div>
+            <h3>TCP 客户端 / 服务端</h3>
+            <p>可主动连接远端服务，也可监听本地端口接收连接，覆盖本机联调和设备接入场景。</p>
+          </article>
+          <article class="feature-card">
+            <div class="icon">16</div>
+            <h3>UTF-8 / HEX 输入</h3>
+            <p>发送窗口支持文本和十六进制输入，兼容大小写、空格与常见分隔符。</p>
+          </article>
+          <article class="feature-card">
+            <div class="icon">▤</div>
+            <h3>接收日志持久化</h3>
+            <p>接收窗口按时间展示数据记录，支持 UTF-8 / HEX 切换和历史日志加载。</p>
+          </article>
+          <article class="feature-card">
+            <div class="icon">✓</div>
+            <h3>任务生命周期管理</h3>
+            <p>任务启动、停止和运行列表由后端统一管理，停止时释放串口、后台任务和 socket。</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="workflow-section" id="workflow">
+        <div class="workflow-copy">
+          <span>Workflow</span>
+          <h2>把临时调试步骤沉淀成稳定链路</h2>
+          <p>
+            新建工作流后，你可以添加发送窗口、串口、TCP 客户端、TCP 服务端和接收窗口。连接方向就是数据方向，保存后即可在工作台一键启动。
+          </p>
+          <ul class="check-list">
+            <li>发送窗口向下游通信节点写入数据</li>
+            <li>通信节点把设备或 socket 返回的数据广播给接收窗口</li>
+            <li>接收窗口生成本地日志，重启应用后仍可查看最近记录</li>
+          </ul>
+        </div>
+        <div class="terminal-panel">
+          <div class="terminal-head">
+            <span></span>
+            <span></span>
+            <span></span>
+            <strong>receive-log</strong>
+          </div>
+          <pre><code>18:42:09.128  tcp-server  5 bytes   A1 B2 C3 0D 0A
+18:42:10.041  serial-com3 8 bytes   48 45 4C 4C 4F 0D 0A
+18:42:11.506  tcp-client  2 bytes   OK</code></pre>
+        </div>
+      </section>
+
+      <section class="section download" id="download">
+        <div class="section-heading">
+          <span>Download</span>
+          <h2>下载 debug-comm</h2>
+          <p>前往 GitHub Releases 获取最新 64 位客户端安装包。</p>
+        </div>
+        <div class="download-tabs" role="tablist" aria-label="下载平台">
+          <button class="tab is-active" type="button" data-target="windows">Windows</button>
+          <button class="tab" type="button" data-target="macos">macOS</button>
+          <button class="tab" type="button" data-target="linux">Linux</button>
+        </div>
+        <div class="download-panels">
+          <article class="download-card is-active" id="windows">
+            <h3>Windows x64</h3>
+            <p>适合 Windows 10 / 11，使用 MSI 安装包安装。</p>
+            <a href="https://github.com/laolaolulu/debug-comm/releases" target="_blank" rel="noreferrer">下载 MSI</a>
+          </article>
+          <article class="download-card" id="macos">
+            <h3>macOS x64</h3>
+            <p>适合 Intel 芯片 Mac，使用 DMG 镜像安装。</p>
+            <a href="https://github.com/laolaolulu/debug-comm/releases" target="_blank" rel="noreferrer">下载 DMG</a>
+          </article>
+          <article class="download-card" id="linux">
+            <h3>Linux x64</h3>
+            <p>适合 Debian / Ubuntu 系发行版，使用 deb 安装包。</p>
+            <a href="https://github.com/laolaolulu/debug-comm/releases" target="_blank" rel="noreferrer">下载 DEB</a>
+          </article>
+        </div>
+      </section>
+
+      <section class="section faq" id="faq">
+        <div class="section-heading">
+          <span>FAQ</span>
+          <h2>常见问题</h2>
+        </div>
+        <div class="faq-list">
+          <details open>
+            <summary>debug-comm 适合什么场景？</summary>
+            <p>适合串口设备调试、TCP 服务联调、协议收发验证、数据格式排查，以及需要保存调试链路的日常开发工作。</p>
+          </details>
+          <details>
+            <summary>发送窗口的 HEX 输入支持哪些格式？</summary>
+            <p>支持大小写十六进制字符，也支持空格、逗号、冒号、横线和下划线等分隔符，例如 A1 B2 C3、a1b2c3、A2-C1。</p>
+          </details>
+          <details>
+            <summary>接收日志会保存在哪里？</summary>
+            <p>接收日志由后端写入本地应用数据目录，不写入工作流配置文件，避免长期日志拖慢配置读写。</p>
+          </details>
+          <details>
+            <summary>项目是否开源？</summary>
+            <p>是的，debug-comm 使用 MIT License 开源，欢迎在 GitHub 提交 issue、建议和贡献代码。</p>
+          </details>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="brand footer-brand">
+        <img src="./assets/logo.svg" alt="" />
+        <span>debug-comm</span>
+      </div>
+      <p>MIT Licensed · Built with Tauri, React and Rust</p>
+      <a href="https://github.com/laolaolulu/debug-comm" target="_blank" rel="noreferrer">GitHub Repository</a>
+    </footer>
+
+    <script src="./script.js"></script>
+  </body>
+</html>

@@ -1,0 +1,26 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="256" height="256" rx="56" fill="url(#bg)"/>
+  <path d="M28 91H90M15 126H90M28 161H90" stroke="#B8F4FF" stroke-width="15" stroke-linecap="round"/>
+  <rect x="68" y="43" width="142" height="154" rx="32" fill="#F8FDFF"/>
+  <path d="M101 108H118V78H160V108H180C188.284 108 195 114.716 195 123V163C195 171.284 188.284 178 180 178H101C92.7157 178 86 171.284 86 163V123C86 114.716 92.7157 108 101 108Z" fill="url(#port)"/>
+  <path d="M111 129V158M127 129V158M143 129V158M159 129V158M175 129V158" stroke="#E0F7FF" stroke-width="8.5" stroke-linecap="round"/>
+  <circle cx="232" cy="126" r="19" fill="#22C55E"/>
+  <path d="M195 126H232" stroke="#22DDF2" stroke-width="13" stroke-linecap="round"/>
+  <path d="M28 224H61V197H94V224H127V197H160V224H216" stroke="url(#protocol)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="256" y2="256" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0EA5F8"/>
+      <stop offset="0.52" stop-color="#0877EA"/>
+      <stop offset="1" stop-color="#063A9B"/>
+    </linearGradient>
+    <linearGradient id="port" x1="86" y1="78" x2="195" y2="178" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#073A8C"/>
+      <stop offset="1" stop-color="#0B64D8"/>
+    </linearGradient>
+    <linearGradient id="protocol" x1="28" y1="197" x2="216" y2="224" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22C55E"/>
+      <stop offset="0.52" stop-color="#22DDF2"/>
+      <stop offset="1" stop-color="#B8F4FF"/>
+    </linearGradient>
+  </defs>
+</svg>
