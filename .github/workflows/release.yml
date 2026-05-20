@@ -67,7 +67,7 @@ jobs:
 
           - name: Linux x64 deb
             os: ubuntu-22.04
-            args: --bundles deb
+            args: --bundles deb,appimage
 
     steps:
       - name: Checkout
@@ -102,10 +102,21 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Validate updater signing key
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
+            throw "Missing GitHub secret TAURI_SIGNING_PRIVATE_KEY. Use the generated Tauri updater private key so latest.json can be signed."
+          }
+
       - name: Build and upload Tauri bundle
         uses: tauri-apps/tauri-action@v0.6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           releaseId: ${{ needs.create-release.outputs.release_id }}
           tagName: ${{ github.ref_name }}

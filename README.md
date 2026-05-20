@@ -14,6 +14,7 @@ debug-comm 以可视化工作流的方式组织通信链路，支持串口、TCP
 - 接收数据窗口：以日志列表展示接收数据，支持 UTF-8 / HEX 切换、本地持久化和历史加载。
 - 任务运行管理：启动、停止、查询当前运行任务，停止时释放后台任务和 socket 资源。
 - 本地持久化：工作流配置、语言设置和接收日志保存在本地应用数据目录。
+- 自动更新：从 GitHub Releases 检查、下载并安装新版本。
 - 中英文界面：基于 react-intl 的国际化支持。
 
 ## 技术栈
@@ -25,6 +26,22 @@ debug-comm 以可视化工作流的方式组织通信链路，支持串口、TCP
 - 状态管理：Zustand
 - 后端：Rust、Tokio、serialport
 - 本地能力：Tauri Store、Dialog、FS、Opener 插件
+- 自动更新：Tauri Updater、Process 插件
+
+## 发布与自动更新
+
+自动更新使用 GitHub Releases 中的 `latest.json`。推送 `v*` 标签后，GitHub Actions 会构建安装包、生成 updater artifacts 并发布 Release。
+
+首次启用前需要在仓库 Settings -> Secrets and variables -> Actions 中添加：
+
+- `TAURI_SIGNING_PRIVATE_KEY`：`C:\Users\lipeng\.tauri\debug-comm.key` 的完整内容。
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`：签名私钥密码；当前生成的私钥没有密码，可以不填。
+
+当前应用内置的 updater 公钥位于 `src-tauri/tauri.conf.json`，Release 端点为：
+
+```text
+https://github.com/laolaolulu/debug-comm/releases/latest/download/latest.json
+```
 
 ## 使用说明
 
