@@ -108,7 +108,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
           if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
-            throw "Missing GitHub secret TAURI_SIGNING_PRIVATE_KEY. Use the generated Tauri updater private key so latest.json can be signed."
+            throw "Missing GitHub secret TAURI_SIGNING_PRIVATE_KEY. This is the Tauri updater signing key, not a code-signing certificate."
           }
 
       - name: Build and upload Tauri bundle

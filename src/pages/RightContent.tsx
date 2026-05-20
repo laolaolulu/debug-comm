@@ -3,8 +3,8 @@ import {
   CloudDownloadOutlined,
   GlobalOutlined,
 } from "@ant-design/icons";
-import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { check } from "@tauri-apps/plugin-updater";
 import { App, Button, Dropdown, MenuProps, Space, Typography } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocaleStore } from "../models/locale";

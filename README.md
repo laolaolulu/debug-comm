@@ -30,12 +30,12 @@ debug-comm 以可视化工作流的方式组织通信链路，支持串口、TCP
 
 ## 发布与自动更新
 
-自动更新使用 GitHub Releases 中的 `latest.json`。推送 `v*` 标签后，GitHub Actions 会构建安装包、生成 updater artifacts 并发布 Release。
+自动更新使用 GitHub Releases 中的 `latest.json`。推送 `v*` 标签后，GitHub Actions 会构建安装包、生成 updater artifacts 并发布 Release；应用检测到新版本后会下载、安装并重启。
 
-首次启用前需要在仓库 Settings -> Secrets and variables -> Actions 中添加：
+这不需要 Windows/macOS 代码签名证书，但 Tauri updater 必须使用更新包签名密钥来校验下载内容。首次启用前需要在仓库 Settings -> Secrets and variables -> Actions 中添加：
 
 - `TAURI_SIGNING_PRIVATE_KEY`：`C:\Users\lipeng\.tauri\debug-comm.key` 的完整内容。
-- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`：签名私钥密码；当前生成的私钥没有密码，可以不填。
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`：签名私钥密码；填写生成私钥时设置的密码。
 
 当前应用内置的 updater 公钥位于 `src-tauri/tauri.conf.json`，Release 端点为：
 

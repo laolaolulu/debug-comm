@@ -35,7 +35,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDNFMEM3MUU0OEE4MTQ3QzUKUldURlI0R0s1SEVNUG5MOGNBZCtwWWVnT1MwaDdJMStJTkZsa0NEemU4dHpsVGlWU0picVRMajMK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDczMzI1MThGNTUyMDgzN0QKUldSOWd5QlZqMUV5Y3lPdURMQmZzRFVRM2dXem1qbjg1bHhIU0w3M1hFMThJOUxhUk9VVnBmYjMK",
       "endpoints": [
         "https://github.com/laolaolulu/debug-comm/releases/latest/download/latest.json"
       ],
