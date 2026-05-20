@@ -307,14 +307,13 @@ TCP 服务端步骤。
 
 - `name`：节点显示名称。
 - `description`：节点说明。
-- `cache_size`：最多缓存的消息条数，默认 200。
 
 当前已实现内容：
 
 - 创建时解析节点 data。
-- 订阅上游 `MsgType::Down` 消息。
-- 将接收到的消息缓存在内部 `VecDeque` 中。
-- 提供 `cached_messages` 方法返回缓存快照，后续可接 Tauri command 或 event。
+- 订阅与接收窗口相邻的步骤消息，兼容接收窗口放在通信节点任一侧的画布连线。
+- 收到消息后通过 Tauri `workflow-step-message` 事件推送给前端。
+- 前端负责写入 IndexedDB 和界面缓存，后端不再做接收日志持久化。
 - `Drop` 时停止后台接收任务。
 
 ### `disinputstep.rs`

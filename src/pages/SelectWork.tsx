@@ -3,6 +3,13 @@ import { useWorkflowIsChange, useWorkflowStore } from "../models/workflow";
 import { useWorkrunStore } from "../models/workrun";
 import { FormattedMessage } from "react-intl";
 
+const renderWorkflowLabel = (name: string, isRunning: boolean) => (
+  <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+    <Badge status={isRunning ? "processing" : "default"} />
+    <span>{name}</span>
+  </span>
+);
+
 export default () => {
   const { select, workflows, setSelect } = useWorkflowStore();
   const { runningIds } = useWorkrunStore();
@@ -15,14 +22,7 @@ export default () => {
       style={{ width: 200 }}
       options={workflows.map((m) => ({
         value: m.id,
-        label: (
-          <span>
-            {m.name}
-            {runningIds.includes(m.id) && (
-              <Badge status="processing" style={{ marginLeft: 8 }} />
-            )}
-          </span>
-        ),
+        label: renderWorkflowLabel(m.name, runningIds.includes(m.id)),
       }))}
       onChange={(id) => {
         if (isChange) {

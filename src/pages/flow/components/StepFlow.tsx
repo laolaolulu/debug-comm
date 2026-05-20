@@ -20,7 +20,7 @@ import { nodeType } from "..";
 import { useIntl } from "react-intl";
 import { useWorkflowStore } from "../../../models/workflow";
 
-function StepNode({ type, data }: NodeProps<WorkflowNode>) {
+const StepNode = ({ type, data }: NodeProps<WorkflowNode>) => {
   const intl = useIntl();
   return (
     <div>
@@ -32,7 +32,7 @@ function StepNode({ type, data }: NodeProps<WorkflowNode>) {
       <Handle type="source" position={Position.Bottom} />
     </div>
   );
-}
+};
 
 export default () => {
   const { select, setSelect } = useWorkflowStore();

@@ -1,82 +1,39 @@
-mod receive_log;
 pub mod step;
 
-use receive_log::{append_record, clear_records, create_record, read_records, ReceiveLogRecord};
 use serde_json::Value;
 use serialport::available_ports;
-use std::path::PathBuf;
-use step::model::{MsgType, StepMsg, WorkflowDefinition};
+use step::model::{MsgType, WorkflowDefinition};
 use step::workflow::Workflow;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::AppHandle;
 
 /// 启动工作流：
 /// 前端传入工作流设计器导出的 JSON 字符串，
 /// Rust 侧完成反序列化并创建工作流实例，同时注册到全局实例集合中。
 #[tauri::command]
 fn start_workflow(app: AppHandle, json: &str) -> Result<String, String> {
-    let (workflow, output_step_ids) = start_workflow_instance(json)?;
+    let workflow = start_workflow_instance(json, Some(app))?;
     let workflow_id = workflow.id().to_string();
-
-    spawn_output_step_bridges(app, workflow, output_step_ids);
 
     Ok(workflow_id)
 }
 
-fn start_workflow_instance(json: &str) -> Result<(std::sync::Arc<Workflow>, Vec<String>), String> {
+fn start_workflow_instance(
+    json: &str,
+    app: Option<AppHandle>,
+) -> Result<std::sync::Arc<Workflow>, String> {
     let definition =
         serde_json::from_str::<WorkflowDefinition>(json).map_err(|err| err.to_string())?;
 
-    let output_step_ids = definition
-        .nodes
-        .iter()
-        .filter(|node| node.r#type.eq_ignore_ascii_case("disoutputstep"))
-        .map(|node| node.id.clone())
-        .collect::<Vec<_>>();
-
     Workflow::remove(&definition.id);
 
-    let workflow = Workflow::new(definition);
+    let workflow = match app {
+        Some(app) => Workflow::new_with_app(definition, app),
+        None => Workflow::new(definition),
+    };
     workflow.run()?;
     Workflow::register_running(&workflow);
 
-    Ok((workflow, output_step_ids))
-}
-
-fn spawn_output_step_bridges(
-    app: AppHandle,
-    workflow: std::sync::Arc<Workflow>,
-    output_step_ids: Vec<String>,
-) {
-    let workflow_id = workflow.id().to_string();
-    for step_id in output_step_ids {
-        let app = app.clone();
-        let workflow = workflow.clone();
-        let workflow_id = workflow_id.clone();
-        tauri::async_runtime::spawn(async move {
-            let mut subscription = workflow.subscribe_step_related(step_id.clone());
-            drop(workflow);
-            while let Some(StepMsg {
-                step_id: source_step_id,
-                msg,
-                ..
-            }) = subscription.rx.recv().await
-            {
-                let record =
-                    create_record(workflow_id.clone(), step_id.clone(), source_step_id, msg);
-                match receive_log_base_dir(&app)
-                    .and_then(|base_dir| append_record(&base_dir, &record))
-                {
-                    Ok(()) => {
-                        let _ = app.emit("workflow-step-message", record);
-                    }
-                    Err(err) => {
-                        eprintln!("failed to persist receive log: {err}");
-                        let _ = app.emit("workflow-step-message", record);
-                    }
-                }
-            }
-        });
-    }
+    Ok(workflow)
 }
 
 #[tauri::command]
@@ -121,28 +78,6 @@ fn get_serial_ports() -> Result<Vec<String>, String> {
     available_ports()
         .map(|ports| ports.into_iter().map(|port| port.port_name).collect())
         .map_err(|err| err.to_string())
-}
-
-#[tauri::command]
-fn get_receive_logs(
-    app: AppHandle,
-    workflow_id: &str,
-    step_id: &str,
-    before: Option<String>,
-    limit: Option<usize>,
-) -> Result<Vec<ReceiveLogRecord>, String> {
-    let base_dir = receive_log_base_dir(&app)?;
-    read_records(&base_dir, workflow_id, step_id, before.as_deref(), limit)
-}
-
-#[tauri::command]
-fn clear_receive_logs(app: AppHandle, workflow_id: &str, step_id: &str) -> Result<(), String> {
-    let base_dir = receive_log_base_dir(&app)?;
-    clear_records(&base_dir, workflow_id, step_id)
-}
-
-fn receive_log_base_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    app.path().app_data_dir().map_err(|err| err.to_string())
 }
 
 #[cfg(test)]
@@ -243,7 +178,7 @@ mod tests {
         let _guard = test_lock();
         let ids_before = Workflow::list_ids();
 
-        let result = start_workflow_instance("{not valid json");
+        let result = start_workflow_instance("{not valid json", None);
 
         assert!(result.is_err());
         assert_eq!(Workflow::list_ids(), ids_before);
@@ -255,7 +190,7 @@ mod tests {
         let id = "test-failed-start";
         Workflow::remove(id);
 
-        let result = start_workflow_instance(&failing_workflow_json(id));
+        let result = start_workflow_instance(&failing_workflow_json(id), None);
 
         assert!(result.is_err());
         assert!(Workflow::get(id).is_none());
@@ -268,8 +203,8 @@ mod tests {
         let id = "test-repeated-start";
         Workflow::remove(id);
 
-        let first = start_workflow_instance(&workflow_json(id)).unwrap();
-        let second = start_workflow_instance(&workflow_json(id)).unwrap();
+        let first = start_workflow_instance(&workflow_json(id), None).unwrap();
+        let second = start_workflow_instance(&workflow_json(id), None).unwrap();
 
         assert_eq!(
             Workflow::list_ids()
@@ -297,8 +232,6 @@ pub fn run() {
             stop_workflow,
             publish_step_message,
             get_workflow_ids,
-            get_receive_logs,
-            clear_receive_logs,
             get_step_manifests,
             get_serial_ports
         ])

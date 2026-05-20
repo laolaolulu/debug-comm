@@ -10,7 +10,7 @@ use serde::Serialize;
 use serde_json::Value;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, OnceLock, RwLock};
-use tauri::async_runtime;
+use tauri::{async_runtime, AppHandle};
 use tokio::sync::{broadcast, mpsc};
 
 /// 工作流实例集合：
@@ -35,6 +35,9 @@ pub struct Workflow {
     /// 当前运行中的步骤实例集合。
     /// key 为 node.id，value 为具体步骤实例。
     steps: RwLock<HashMap<String, Arc<dyn BaseStep>>>,
+    /// Tauri 应用句柄。
+    /// 只有需要把数据推送给前端的步骤会使用它；测试或纯后端构造时可以为空。
+    app: Option<AppHandle>,
 }
 
 impl Workflow {
@@ -59,6 +62,19 @@ impl Workflow {
             definition,
             tx,
             steps: RwLock::new(HashMap::new()),
+            app: None,
+        })
+    }
+
+    /// 创建带 Tauri 应用句柄的工作流实例。
+    /// 接收窗口步骤会用这个句柄把收到的数据 emit 给前端。
+    pub fn new_with_app(definition: WorkflowDefinition, app: AppHandle) -> Arc<Self> {
+        let (tx, _) = broadcast::channel::<StepMsg<Value>>(64);
+        Arc::new(Self {
+            definition,
+            tx,
+            steps: RwLock::new(HashMap::new()),
+            app: Some(app),
         })
     }
 
@@ -271,7 +287,8 @@ impl Workflow {
                 Ok(step)
             }
             "disoutputstep" => {
-                let step: Arc<dyn BaseStep> = DisOutputStep::new(node, Arc::clone(self))?;
+                let step: Arc<dyn BaseStep> =
+                    DisOutputStep::new(node, Arc::clone(self), self.app.clone())?;
                 Ok(step)
             }
             "serialportstep" => {

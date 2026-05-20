@@ -26,7 +26,7 @@ interface DraggableNodeProps {
   onDrop: (step: StepManifest, position: XYPosition) => void;
 }
 
-function DraggableNode({ step, onDrop }: DraggableNodeProps) {
+const DraggableNode = ({ step, onDrop }: DraggableNodeProps) => {
   const draggableRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<XYPosition>({ x: 0, y: 0 });
   const intl = useIntl();
@@ -49,11 +49,13 @@ function DraggableNode({ step, onDrop }: DraggableNodeProps) {
   });
   return (
     <div ref={draggableRef} className="listnode">
-      {intl.formatMessage(nodeType[step.type])}
+      <span className="listnode-title">
+        <span>{intl.formatMessage(nodeType[step.type])}</span>
+      </span>
       <HolderOutlined style={{ color: "#666" }} />
     </div>
   );
-}
+};
 
 export default () => {
   const { setNodes, screenToFlowPosition } = useReactFlow();

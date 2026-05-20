@@ -1,81 +1,80 @@
-import { ClearOutlined } from "@ant-design/icons";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { ClearOutlined } from '@ant-design/icons';
 import {
-  App,
   Button,
   Empty,
   Flex,
   Segmented,
   Space,
-  Spin,
   Splitter,
   Typography,
-} from "antd";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useIntl } from "react-intl";
-import { useWorkflowStore } from "../../../models/workflow";
+} from 'antd';
+import dayjs from 'dayjs';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FormattedMessage } from 'react-intl';
+import { useMsgStore } from '../../../models/msgstore';
+import { useWorkflowStore } from '../../../models/workflow';
 
-const PAGE_SIZE = 100;
+const getRelatedSendStepIds = (workflow: Workflow, outputStepId: string) => {
+  const lowerStepIds = new Set(
+    workflow.edges
+      .filter((edge) => edge.source === outputStepId)
+      .map((edge) => edge.target),
+  );
+  const nodeById = new Map(workflow.nodes.map((node) => [node.id, node]));
 
-type OutputMode = "utf-8" | "hex";
-
-type ReceiveLogRecord = {
-  id: string;
-  received_at: number;
-  workflow_id: string;
-  step_id: string;
-  source_step_id: string;
-  byte_len: number;
-  msg: unknown;
+  return [
+    ...new Set(
+      workflow.edges
+        .filter((edge) => lowerStepIds.has(edge.target))
+        .map((edge) => edge.source)
+        .filter((stepId) => nodeById.get(stepId)?.type === 'DisInputStep'),
+    ),
+  ];
 };
 
-const bytesToHex = (bytes: number[]) =>
-  bytes
-    .map((byte) => byte.toString(16).padStart(2, "0").toUpperCase())
-    .join(" ");
-
-const formatPayload = (msg: unknown, mode: OutputMode) => {
-  if (Array.isArray(msg) && msg.every((item) => typeof item === "number")) {
-    return mode === "hex"
-      ? bytesToHex(msg)
-      : new TextDecoder().decode(new Uint8Array(msg));
-  }
-
-  if (typeof msg === "string") {
-    return mode === "hex"
-      ? bytesToHex([...new TextEncoder().encode(msg)])
-      : msg;
-  }
-
-  return JSON.stringify(msg);
-};
-
-const mergeLogs = (
-  current: ReceiveLogRecord[],
-  incoming: ReceiveLogRecord[],
-) => {
-  const records = new Map<string, ReceiveLogRecord>();
-  for (const item of current) {
-    records.set(item.id, item);
-  }
-  for (const item of incoming) {
-    records.set(item.id, item);
-  }
-  return [...records.values()].sort((a, b) => a.id.localeCompare(b.id));
-};
-
-function OutputPanel({ node, workflowId }: { node: WorkflowNode; workflowId: string }) {
-  const { message } = App.useApp();
-  const intl = useIntl();
+const OutputPanel = ({
+  node,
+  workflow,
+}: {
+  node: WorkflowNode;
+  workflow: Workflow;
+}) => {
   const listRef = useRef<HTMLDivElement | null>(null);
-  const [mode, setMode] = useState<OutputMode>("utf-8");
-  const [items, setItems] = useState<ReceiveLogRecord[]>([]);
-  const [loadingInitial, setLoadingInitial] = useState(false);
-  const [loadingOlder, setLoadingOlder] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
+  const [mode, setMode] = useState<string>('utf-8');
+  const sendStepIds = useMemo(
+    () => getRelatedSendStepIds(workflow, node.id),
+    [node.id, workflow],
+  );
+  const sessionStepIds = useMemo(
+    () => [node.id, ...sendStepIds],
+    [node.id, sendStepIds],
+  );
+  const sendStepIdSet = useMemo(() => new Set(sendStepIds), [sendStepIds]);
+  const nodeNameById = useMemo(
+    () =>
+      new Map(
+        workflow.nodes.map((workflowNode) => [
+          workflowNode.id,
+          workflowNode.data.name || workflowNode.id,
+        ]),
+      ),
+    [workflow.nodes],
+  );
+  const { msgdata, clearStep } = useMsgStore();
+  const receiveCount = useMsgStore(
+    (state) => state.msgcount[workflow.id]?.[node.id] ?? 0,
+  );
+  const items = useMemo(
+    () =>
+      msgdata
+        .filter(
+          (item) =>
+            item.taskId === workflow.id && sessionStepIds.includes(item.stepId),
+        )
+        .sort((a, b) => a.time - b.time),
 
-  const oldestCursor = items[0]?.id;
+    [msgdata, sessionStepIds],
+  );
 
   const scrollToBottom = useCallback(() => {
     requestAnimationFrame(() => {
@@ -86,220 +85,132 @@ function OutputPanel({ node, workflowId }: { node: WorkflowNode; workflowId: str
     });
   }, []);
 
-  const loadInitial = useCallback(async () => {
-    setLoadingInitial(true);
-    try {
-      const logs = await invoke<ReceiveLogRecord[]>("get_receive_logs", {
-        workflowId,
-        stepId: node.id,
-        limit: PAGE_SIZE,
-      });
-      setItems(logs);
-      setHasMore(logs.length === PAGE_SIZE);
-      scrollToBottom();
-    } catch (error) {
-      message.error(String(error));
-    } finally {
-      setLoadingInitial(false);
-    }
-  }, [message, node.id, scrollToBottom, workflowId]);
-
-  const loadOlder = useCallback(async () => {
-    if (!oldestCursor || loadingOlder || !hasMore) {
-      return;
-    }
-
-    const list = listRef.current;
-    const previousHeight = list?.scrollHeight ?? 0;
-    setLoadingOlder(true);
-    try {
-      const logs = await invoke<ReceiveLogRecord[]>("get_receive_logs", {
-        workflowId,
-        stepId: node.id,
-        before: oldestCursor,
-        limit: PAGE_SIZE,
-      });
-      setItems((current) => mergeLogs(current, logs));
-      setHasMore(logs.length === PAGE_SIZE);
-      requestAnimationFrame(() => {
-        const currentList = listRef.current;
-        if (currentList) {
-          currentList.scrollTop += currentList.scrollHeight - previousHeight;
-        }
-      });
-    } catch (error) {
-      message.error(String(error));
-    } finally {
-      setLoadingOlder(false);
-    }
-  }, [hasMore, loadingOlder, message, node.id, oldestCursor, workflowId]);
-
   useEffect(() => {
-    setItems([]);
-    setHasMore(false);
-    void loadInitial();
-  }, [loadInitial]);
-
-  useEffect(() => {
-    const unlisten = listen<ReceiveLogRecord>(
-      "workflow-step-message",
-      ({ payload }) => {
-        if (payload.workflow_id !== workflowId || payload.step_id !== node.id) {
-          return;
-        }
-        setItems((current) => mergeLogs(current, [payload]));
-        scrollToBottom();
-      },
-    );
-
-    return () => {
-      unlisten.then((dispose) => dispose());
-    };
-  }, [node.id, scrollToBottom, workflowId]);
-
-  const emptyText = useMemo(
-    () =>
-      intl.formatMessage({
-        id: "work.output.emptyLogs",
-        defaultMessage: "暂无接收数据",
-      }),
-    [intl],
-  );
+    scrollToBottom();
+  }, [items.length]);
 
   return (
     <div
       style={{
-        height: "calc(100% - 10px)",
-        display: "flex",
-        flexDirection: "column",
-        margin: "0 10px 10px 10px",
-        padding: "10px 12px",
-        background: "#fff",
-        border: "1px solid #d9d9d9",
+        height: 'calc(100% - 10px)',
+        display: 'flex',
+        flexDirection: 'column',
+        margin: '0 10px 10px 10px',
+        padding: '10px 12px',
+        background: '#fff',
+        border: '1px solid #d9d9d9',
         borderRadius: 8,
-        boxShadow: "0 1px 4px rgba(15, 23, 42, 0.04)",
+        boxShadow: '0 1px 4px rgba(15, 23, 42, 0.04)',
         minHeight: 0,
       }}
     >
-      <Flex justify="space-between" align="center" gap={8}>
+      <Flex justify='space-between' align='center' gap={8}>
         <Typography.Text
           ellipsis
-          style={{ color: "#1677ff", fontSize: 13, maxWidth: 180 }}
+          style={{ color: '#1677ff', fontSize: 13, maxWidth: 180 }}
         >
           {node.data.name}
         </Typography.Text>
         <Space>
           <Segmented
             value={mode}
-            options={["utf-8", "hex"]}
-            onChange={(next) => setMode(next as OutputMode)}
+            options={['utf-8', 'hex']}
+            onChange={(next) => setMode(next)}
           />
           <Button
             icon={<ClearOutlined />}
-            disabled={items.length === 0}
+            disabled={receiveCount === 0}
             onClick={async () => {
-              try {
-                await invoke("clear_receive_logs", {
-                  workflowId,
-                  stepId: node.id,
-                });
-                setItems([]);
-                setHasMore(false);
-              } catch (error) {
-                message.error(String(error));
-              }
+              await clearStep(workflow.id, node.id);
             }}
           >
-            {intl.formatMessage({
-              id: "work.output.clear",
-              defaultMessage: "清空",
-            })}
+            <FormattedMessage
+              id='work.output.clearWithCount'
+              defaultMessage='清空 ({count})'
+              values={{ count: receiveCount }}
+            />
           </Button>
         </Space>
       </Flex>
 
       <div
-        ref={listRef}
-        onScroll={(event) => {
-          if (event.currentTarget.scrollTop <= 8) {
-            void loadOlder();
-          }
-        }}
+        ref={listRef} //为了调整滚动条到最下面
         style={{
           flex: 1,
           minHeight: 0,
-          overflow: "auto",
+          overflow: 'auto',
           marginTop: 10,
           paddingRight: 4,
           fontFamily:
-            "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+            'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
           fontSize: 12,
         }}
       >
-        {loadingOlder && (
-          <Flex justify="center" style={{ padding: "8px 0" }}>
-            <Spin size="small" />
-          </Flex>
-        )}
-        {loadingInitial ? (
-          <Flex justify="center" align="center" style={{ height: "100%" }}>
-            <Spin />
-          </Flex>
-        ) : items.length === 0 ? (
-          <Flex justify="center" align="center" style={{ height: "100%" }}>
-            <Typography.Text type="secondary">{emptyText}</Typography.Text>
-          </Flex>
+        {items.length === 0 ? (
+          <Empty />
         ) : (
-          items.map((item) => (
-            <div
-              key={item.id}
-              style={{
-                borderBottom: "1px solid #f0f0f0",
-                padding: "7px 0",
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-              }}
-            >
-              <Flex justify="space-between" gap={8} wrap="wrap">
-                <Typography.Text type="secondary" style={{ fontSize: 11 }}>
-                  {new Date(item.received_at).toLocaleString()}
-                </Typography.Text>
-                <Typography.Text type="secondary" style={{ fontSize: 11 }}>
-                  {item.source_step_id} · {item.byte_len} B
-                </Typography.Text>
-              </Flex>
-              <div style={{ marginTop: 4 }}>{formatPayload(item.msg, mode)}</div>
-            </div>
-          ))
+          items.map((item, index) => {
+            const isSend = sendStepIdSet.has(item.stepBy);
+            return (
+              <div
+                key={index}
+                style={{
+                  borderBottom: '1px solid #f0f0f0',
+                  padding: '7px 0',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  display: 'flex',
+                  justifyContent: isSend ? 'flex-end' : 'flex-start',
+                }}
+              >
+                <div
+                  style={{
+                    maxWidth: '78%',
+                    padding: '6px 8px',
+                    border: `1px solid ${isSend ? '#ffd8bf' : '#d6e4ff'}`,
+                    borderRadius: 6,
+                    background: isSend ? '#fff7e6' : '#f0f5ff',
+                  }}
+                >
+                  <Flex justify='space-between' gap={8} wrap='wrap'>
+                    <Typography.Text type='secondary' style={{ fontSize: 11 }}>
+                      {dayjs(item.time).format('YYYY-MM-DD HH:mm:ss.SSS')}
+                    </Typography.Text>
+                    <Typography.Text type='secondary' style={{ fontSize: 11 }}>
+                      {nodeNameById.get(item.stepBy)} · {item.msg.length} B
+                    </Typography.Text>
+                  </Flex>
+                  <div style={{ marginTop: 4 }}>
+                    {mode === 'hex'
+                      ? item.msg
+                          .map((byte) =>
+                            byte.toString(16).padStart(2, '0').toUpperCase(),
+                          )
+                          .join(' ')
+                      : new TextDecoder().decode(new Uint8Array(item.msg))}
+                  </div>
+                </div>
+              </div>
+            );
+          })
         )}
       </div>
     </div>
   );
-}
+};
 
 export default () => {
   const select = useWorkflowStore((state) => state.select);
-  const intl = useIntl();
-  const workflowId = select?.id;
-  const nodes = select?.nodes.filter((node) => node.type === "DisOutputStep") ?? [];
+  const nodes =
+    select?.nodes.filter((node) => node.type === 'DisOutputStep') ?? [];
 
-  if (nodes.length === 0 || !workflowId) {
-    return (
-      <Empty
-        image={Empty.PRESENTED_IMAGE_SIMPLE}
-        description={intl.formatMessage({
-          id: "work.output.noNodes",
-          defaultMessage: "暂无接收节点",
-        })}
-      />
-    );
-  }
-
-  return (
-    <Splitter style={{ height: "100%" }}>
+  return nodes.length === 0 ? (
+    <Empty />
+  ) : (
+    <Splitter style={{ height: '100%' }}>
       {nodes.map((node) => (
         <Splitter.Panel key={node.id}>
-          <OutputPanel node={node} workflowId={workflowId} />
+          <OutputPanel node={node} workflow={select} />
         </Splitter.Panel>
       ))}
     </Splitter>
