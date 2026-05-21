@@ -59,7 +59,7 @@ jobs:
         include:
           - name: Windows x64
             os: windows-2022
-            args: --bundles msi
+            args: --bundles nsis
 
           - name: macOS x64
             os: macos-latest
