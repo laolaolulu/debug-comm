@@ -197,14 +197,62 @@ jobs:
       - name: Initialize Android project
         run: pnpm tauri android init --ci
 
-      - name: Build and upload Android bundle
-        uses: tauri-apps/tauri-action@v0.6
+      - name: Build Android bundle
+        run: pnpm tauri android build --apk --aab --ci
+
+      - name: Upload Android bundle
+        uses: actions/github-script@v8
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          releaseId: ${{ needs.create-release.outputs.release_id }}
-          tagName: ${{ github.ref_name }}
-          releaseDraft: true
-          prerelease: false
-          mobile: android
-          args: --apk --aab
+          script: |
+            const fs = require('node:fs');
+            const path = require('node:path');
+
+            const releaseId = Number('${{ needs.create-release.outputs.release_id }}');
+            const distDir = path.join(
+              process.env.GITHUB_WORKSPACE,
+              'src-tauri',
+              'gen',
+              'android',
+              'app',
+              'build',
+              'outputs',
+            );
+
+            const files = [];
+            const collect = (dir) => {
+              if (!fs.existsSync(dir)) {
+                return;
+              }
+
+              for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+                const current = path.join(dir, entry.name);
+                if (entry.isDirectory()) {
+                  collect(current);
+                  continue;
+                }
+
+                if (/\.(apk|aab)$/.test(entry.name)) {
+                  files.push(current);
+                }
+              }
+            };
+
+            collect(distDir);
+
+            if (files.length === 0) {
+              throw new Error(`No Android APK or AAB artifacts found under ${distDir}`);
+            }
+
+            for (const file of files) {
+              const name = `debug-comm_${process.env.GITHUB_REF_NAME}_${path.basename(file)}`;
+              const data = fs.readFileSync(file);
+              await github.rest.repos.uploadReleaseAsset({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: releaseId,
+                name,
+                data,
+              });
+            }
