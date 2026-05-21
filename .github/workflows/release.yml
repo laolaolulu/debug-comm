@@ -58,16 +58,16 @@ jobs:
       matrix:
         include:
           - name: Windows x64
-            os: windows-2022
+            os: windows-latest
             args: --bundles nsis
 
           - name: macOS x64
             os: macos-latest
             args: --bundles dmg
 
-          - name: Linux x64 deb
-            os: ubuntu-22.04
-            args: --bundles deb,appimage
+          - name: Linux x64
+            os: ubuntu-latest
+            args: --bundles deb
 
     steps:
       - name: Checkout
