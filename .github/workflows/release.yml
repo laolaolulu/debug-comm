@@ -197,8 +197,84 @@ jobs:
       - name: Initialize Android project
         run: pnpm tauri android init --ci
 
+      - name: Setup Android signing
+        env:
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_BASE64: ${{ secrets.ANDROID_KEY_BASE64 }}
+        run: |
+          if [ -z "$ANDROID_KEY_ALIAS" ] || [ -z "$ANDROID_KEY_PASSWORD" ] || [ -z "$ANDROID_KEY_BASE64" ]; then
+            echo "Missing Android signing secrets." >&2
+            exit 1
+          fi
+
+          cd src-tauri/gen/android
+          echo "keyAlias=$ANDROID_KEY_ALIAS" > keystore.properties
+          echo "password=$ANDROID_KEY_PASSWORD" >> keystore.properties
+          base64 -d <<< "$ANDROID_KEY_BASE64" > "$RUNNER_TEMP/debug-comm-release.jks"
+          echo "storeFile=$RUNNER_TEMP/debug-comm-release.jks" >> keystore.properties
+
+      - name: Configure Android release signing
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+
+          const file = 'src-tauri/gen/android/app/build.gradle.kts';
+          let text = fs.readFileSync(file, 'utf8');
+
+          const imports = [
+            'import java.io.FileInputStream',
+            'import java.util.Properties',
+          ];
+
+          for (const item of imports.reverse()) {
+            if (!text.includes(item)) {
+              text = `${item}\n${text}`;
+            }
+          }
+
+          if (!text.includes('create("release")')) {
+            const signingConfig = `
+    signingConfigs {
+        create("release") {
+            val keystorePropertiesFile = rootProject.file("keystore.properties")
+            val keystoreProperties = Properties()
+
+            if (keystorePropertiesFile.exists()) {
+                keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+            }
+
+            keyAlias = keystoreProperties["keyAlias"] as String
+            keyPassword = keystoreProperties["password"] as String
+            storeFile = file(keystoreProperties["storeFile"] as String)
+            storePassword = keystoreProperties["password"] as String
+        }
+    }
+`;
+
+            const next = text.replace(/\n\s*buildTypes\s*\{/, `${signingConfig}\n    buildTypes {`);
+            if (next === text) {
+              throw new Error('Could not find buildTypes block in Android Gradle file');
+            }
+            text = next;
+          }
+
+          if (!text.includes('signingConfig = signingConfigs.getByName("release")')) {
+            const next = text.replace(
+              /getByName\("release"\)\s*\{/,
+              'getByName("release") {\n            signingConfig = signingConfigs.getByName("release")',
+            );
+            if (next === text) {
+              throw new Error('Could not find release build type in Android Gradle file');
+            }
+            text = next;
+          }
+
+          fs.writeFileSync(file, text);
+          NODE
+
       - name: Build Android bundle
-        run: pnpm tauri android build --apk --aab --ci
+        run: pnpm tauri android build --apk --ci
 
       - name: Upload Android bundle
         uses: actions/github-script@v8
@@ -233,7 +309,7 @@ jobs:
                   continue;
                 }
 
-                if (/\.(apk|aab)$/.test(entry.name)) {
+                if (/\.apk$/.test(entry.name) && !/-unsigned\.apk$/.test(entry.name)) {
                   files.push(current);
                 }
               }
@@ -242,7 +318,7 @@ jobs:
             collect(distDir);
 
             if (files.length === 0) {
-              throw new Error(`No Android APK or AAB artifacts found under ${distDir}`);
+              throw new Error(`No Android APK artifacts found under ${distDir}`);
             }
 
             for (const file of files) {
