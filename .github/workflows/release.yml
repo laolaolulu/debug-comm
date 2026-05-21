@@ -169,7 +169,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install Android Rust targets
-        run: rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
+        run: rustup target add aarch64-linux-android
 
       - name: Setup Java
         uses: actions/setup-java@v5
@@ -275,7 +275,7 @@ jobs:
           NODE
 
       - name: Build Android bundle
-        run: pnpm tauri android build --apk --ci
+        run: pnpm tauri android build --apk --target aarch64 --ci
 
       - name: Upload Android bundle
         uses: actions/github-script@v8
