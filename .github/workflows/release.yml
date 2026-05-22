@@ -240,9 +240,7 @@ jobs:
           }
 
           const resDir = 'src-tauri/gen/android/app/src/main/res';
-          const valuesDir = path.join(resDir, 'values');
           const valuesV35Dir = path.join(resDir, 'values-v35');
-          fs.mkdirSync(valuesDir, { recursive: true });
           fs.mkdirSync(valuesV35Dir, { recursive: true });
 
           const valuesDirs = fs
@@ -273,15 +271,35 @@ jobs:
             return style.replace(/<\/style>/, `        ${item}\n    </style>`);
           };
 
-          const ensureResourcesFile = (stylesFile) => {
-            if (!fs.existsSync(stylesFile)) {
-              fs.writeFileSync(stylesFile, '<resources>\n</resources>\n');
+          const patchStylesInFile = (file, themeName, items) => {
+            if (!fs.existsSync(file)) {
+              return false;
             }
+
+            const styles = fs.readFileSync(file, 'utf8');
+            const stylePattern = new RegExp(
+              `<style\\b[^>]*name="${escapeRegExp(themeName)}"[^>]*>[\\s\\S]*?<\\/style>`,
+            );
+
+            if (!stylePattern.test(styles)) {
+              return false;
+            }
+
+            const nextStyles = styles.replace(stylePattern, (style) =>
+              items.reduce(
+                (current, [itemName, itemValue]) =>
+                  upsertStyleItem(current, itemName, itemValue),
+                style,
+              ),
+            );
+            fs.writeFileSync(file, nextStyles);
+            return true;
           };
 
-          const ensureStyle = (stylesFile, themeName, items) => {
-            ensureResourcesFile(stylesFile);
-            let styles = fs.readFileSync(stylesFile, 'utf8');
+          const ensureVersionedStyle = (file, themeName, items) => {
+            let styles = fs.existsSync(file)
+              ? fs.readFileSync(file, 'utf8')
+              : '<resources>\n</resources>\n';
             const stylePattern = new RegExp(
               `<style\\b[^>]*name="${escapeRegExp(themeName)}"[^>]*>[\\s\\S]*?<\\/style>`,
             );
@@ -299,46 +317,37 @@ jobs:
                 .map(([itemName, itemValue]) => `        <item name="${itemName}">${itemValue}</item>`)
                 .join('\n');
               const style = [
-                `    <style name="${themeName}" parent="android:style/Theme.Material.Light.NoActionBar">`,
+                `    <style name="${themeName}">`,
                 styleBody,
                 '    </style>',
               ].join('\n');
               styles = styles.replace(/<\/resources>/, `${style}\n</resources>`);
             }
 
-            fs.writeFileSync(stylesFile, styles);
+            fs.writeFileSync(file, styles);
           };
 
-          for (const dir of valuesDirs) {
-            const stylesFile = path.join(dir, 'styles.xml');
-            if (!fs.existsSync(stylesFile)) {
-              continue;
-            }
-
-            let styles = fs.readFileSync(stylesFile, 'utf8');
-            const nextStyles = styles.replace(
-              /<style\b[^>]*name="([^"]+)"[^>]*>[\s\S]*?<\/style>/g,
-              (style, name) => {
-                if (!themeNames.includes(name)) {
-                  return style;
-                }
-
-                return styleItems.reduce(
-                  (current, [itemName, itemValue]) =>
-                    upsertStyleItem(current, itemName, itemValue),
-                  style,
-                );
-              },
-            );
-
-            if (nextStyles !== styles) {
-              fs.writeFileSync(stylesFile, nextStyles);
-            }
-          }
-
           for (const themeName of themeNames) {
-            ensureStyle(path.join(valuesDir, 'styles.xml'), themeName, styleItems);
-            ensureStyle(path.join(valuesV35Dir, 'styles.xml'), themeName, android35StyleItems);
+            let patchedBaseTheme = false;
+            for (const dir of valuesDirs) {
+              for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+                if (entry.isFile() && entry.name.endsWith('.xml')) {
+                  patchedBaseTheme =
+                    patchStylesInFile(path.join(dir, entry.name), themeName, styleItems) ||
+                    patchedBaseTheme;
+                }
+              }
+            }
+
+            if (!patchedBaseTheme) {
+              throw new Error(`无法找到 Android 主题样式：${themeName}`);
+            }
+
+            ensureVersionedStyle(
+              path.join(valuesV35Dir, 'themes.xml'),
+              themeName,
+              android35StyleItems,
+            );
           }
           NODE
 
