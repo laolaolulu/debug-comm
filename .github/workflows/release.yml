@@ -1,4 +1,4 @@
-name: Release
+name: 发布
 
 on:
   push:
@@ -10,12 +10,12 @@ permissions:
 
 jobs:
   create-release:
-    name: Create GitHub Release
+    name: 创建 GitHub Release
     runs-on: ubuntu-latest
     outputs:
       release_id: ${{ steps.create-release.outputs.result }}
     steps:
-      - name: Create draft release
+      - name: 创建草稿 Release
         id: create-release
         uses: actions/github-script@v8
         with:
@@ -50,7 +50,7 @@ jobs:
             return String(data.id);
 
   build:
-    name: Build ${{ matrix.name }}
+    name: 构建 ${{ matrix.name }}
     needs: create-release
     runs-on: ${{ matrix.os }}
     strategy:
@@ -70,48 +70,48 @@ jobs:
             args: --bundles deb
 
     steps:
-      - name: Checkout
+      - name: 拉取代码
         uses: actions/checkout@v6
 
-      - name: Install Linux dependencies
+      - name: 安装 Linux 依赖
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libudev-dev
 
-      - name: Setup pnpm
+      - name: 配置 pnpm
         uses: pnpm/action-setup@v6
         with:
           version: 10.33.2
           run_install: false
 
-      - name: Setup Node.js
+      - name: 配置 Node.js
         uses: actions/setup-node@v6
         with:
           node-version: lts/*
           cache: pnpm
 
-      - name: Install Rust stable
+      - name: 安装 Rust stable
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Rust cache
+      - name: Rust 缓存
         uses: swatinem/rust-cache@v2
         with:
           workspaces: ./src-tauri -> target
 
-      - name: Install frontend dependencies
+      - name: 安装前端依赖
         run: pnpm install --frozen-lockfile
 
-      - name: Validate updater signing key
+      - name: 校验更新签名密钥
         shell: pwsh
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
           if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
-            throw "Missing GitHub secret TAURI_SIGNING_PRIVATE_KEY. This is the Tauri updater signing key, not a code-signing certificate."
+            throw "缺少 GitHub secret：TAURI_SIGNING_PRIVATE_KEY。这是 Tauri 更新器签名密钥，不是代码签名证书。"
           }
 
-      - name: Build and upload Tauri bundle
+      - name: 构建并上传 Tauri 安装包
         uses: tauri-apps/tauri-action@v0.6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -125,14 +125,14 @@ jobs:
           args: ${{ matrix.args }}
 
   publish-release:
-    name: Publish GitHub Release
+    name: 发布 GitHub Release
     needs:
       - create-release
       - build
       - build-android
     runs-on: ubuntu-latest
     steps:
-      - name: Publish release
+      - name: 发布 Release
         uses: actions/github-script@v8
         with:
           script: |
@@ -146,65 +146,171 @@ jobs:
             });
 
   build-android:
-    name: Build Android
+    name: 构建 Android
     needs: create-release
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: 拉取代码
         uses: actions/checkout@v6
 
-      - name: Setup pnpm
+      - name: 配置 pnpm
         uses: pnpm/action-setup@v6
         with:
           version: 10.33.2
           run_install: false
 
-      - name: Setup Node.js
+      - name: 配置 Node.js
         uses: actions/setup-node@v6
         with:
           node-version: lts/*
           cache: pnpm
 
-      - name: Install Rust stable
+      - name: 安装 Rust stable
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install Android Rust targets
+      - name: 安装 Android Rust 目标
         run: rustup target add aarch64-linux-android
 
-      - name: Setup Java
+      - name: 配置 Java
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
 
-      - name: Setup Android SDK
+      - name: 配置 Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android NDK
+      - name: 安装 Android NDK
         run: |
           sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.0.12077973"
           echo "NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> "$GITHUB_ENV"
 
-      - name: Rust cache
+      - name: Rust 缓存
         uses: swatinem/rust-cache@v2
         with:
           workspaces: ./src-tauri -> target
 
-      - name: Install frontend dependencies
+      - name: 安装前端依赖
         run: pnpm install --frozen-lockfile
 
-      - name: Initialize Android project
+      - name: 初始化 Android 工程
         run: pnpm tauri android init --ci
 
-      - name: Setup Android signing
+      - name: 配置 Android 窗口行为
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const manifestFile = 'src-tauri/gen/android/app/src/main/AndroidManifest.xml';
+          let manifest = fs.readFileSync(manifestFile, 'utf8');
+
+          const setAndroidAttribute = (tag, name, value) => {
+            const attribute = `android:${name}`;
+            const pattern = new RegExp(`${attribute}="[^"]*"`);
+            if (pattern.test(tag)) {
+              return tag.replace(pattern, `${attribute}="${value}"`);
+            }
+            return tag.replace(/>$/, `\n            ${attribute}="${value}">`);
+          };
+
+          const nextManifest = manifest.replace(
+            /<activity\b(?=[^>]*android:name="[^"]*MainActivity[^"]*")[^>]*>/,
+            (tag) => setAndroidAttribute(tag, 'screenOrientation', 'landscape'),
+          );
+
+          if (nextManifest === manifest) {
+            throw new Error('无法在 AndroidManifest.xml 中找到 Android MainActivity');
+          }
+
+          manifest = nextManifest;
+          fs.writeFileSync(manifestFile, manifest);
+
+          const themeNames = [
+            ...new Set(
+              [...manifest.matchAll(/android:theme="@style\/([^"]+)"/g)].map(
+                (match) => match[1],
+              ),
+            ),
+          ];
+
+          if (themeNames.length === 0) {
+            throw new Error('无法在 AndroidManifest.xml 中找到 Android 主题引用');
+          }
+
+          const resDir = 'src-tauri/gen/android/app/src/main/res';
+          const valuesDirs = fs
+            .readdirSync(resDir, { withFileTypes: true })
+            .filter((entry) => entry.isDirectory() && entry.name.startsWith('values'))
+            .map((entry) => path.join(resDir, entry.name));
+
+          const styleItems = [
+            ['android:windowOptOutEdgeToEdgeEnforcement', 'true'],
+            ['android:statusBarColor', '@android:color/white'],
+            ['android:navigationBarColor', '@android:color/white'],
+            ['android:windowLightStatusBar', 'true'],
+          ];
+
+          const escapeRegExp = (value) =>
+            value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+          const upsertStyleItem = (style, name, value) => {
+            const pattern = new RegExp(
+              `<item\\s+name="${escapeRegExp(name)}">[^<]*<\\/item>`,
+            );
+            const item = `<item name="${name}">${value}</item>`;
+            if (pattern.test(style)) {
+              return style.replace(pattern, item);
+            }
+            return style.replace(/<\/style>/, `        ${item}\n    </style>`);
+          };
+
+          let patchedStyles = 0;
+
+          for (const dir of valuesDirs) {
+            const stylesFile = path.join(dir, 'styles.xml');
+            if (!fs.existsSync(stylesFile)) {
+              continue;
+            }
+
+            let styles = fs.readFileSync(stylesFile, 'utf8');
+            const nextStyles = styles.replace(
+              /<style\b[^>]*name="([^"]+)"[^>]*>[\s\S]*?<\/style>/g,
+              (style, name) => {
+                if (!themeNames.includes(name)) {
+                  return style;
+                }
+
+                patchedStyles += 1;
+                return styleItems.reduce(
+                  (current, [itemName, itemValue]) =>
+                    upsertStyleItem(current, itemName, itemValue),
+                  style,
+                );
+              },
+            );
+
+            if (nextStyles !== styles) {
+              fs.writeFileSync(stylesFile, nextStyles);
+            }
+          }
+
+          if (patchedStyles === 0) {
+            throw new Error(
+              `无法找到 Android 主题样式：${themeNames.join(', ')}`,
+            );
+          }
+          NODE
+
+      - name: 配置 Android 签名
         env:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           ANDROID_KEY_BASE64: ${{ secrets.ANDROID_KEY_BASE64 }}
         run: |
           if [ -z "$ANDROID_KEY_ALIAS" ] || [ -z "$ANDROID_KEY_PASSWORD" ] || [ -z "$ANDROID_KEY_BASE64" ]; then
-            echo "Missing Android signing secrets." >&2
+            echo "缺少 Android 签名 secrets。" >&2
             exit 1
           fi
 
@@ -214,7 +320,7 @@ jobs:
           base64 -d <<< "$ANDROID_KEY_BASE64" > "$RUNNER_TEMP/debug-comm-release.jks"
           echo "storeFile=$RUNNER_TEMP/debug-comm-release.jks" >> keystore.properties
 
-      - name: Configure Android release signing
+      - name: 配置 Android Release 签名
         run: |
           node <<'NODE'
           const fs = require('node:fs');
@@ -255,7 +361,7 @@ jobs:
 
             const next = text.replace(/\n\s*buildTypes\s*\{/, `${signingConfig}\n    buildTypes {`);
             if (next === text) {
-              throw new Error('Could not find buildTypes block in Android Gradle file');
+              throw new Error('无法在 Android Gradle 文件中找到 buildTypes 配置块');
             }
             text = next;
           }
@@ -266,7 +372,7 @@ jobs:
               'getByName("release") {\n            signingConfig = signingConfigs.getByName("release")',
             );
             if (next === text) {
-              throw new Error('Could not find release build type in Android Gradle file');
+              throw new Error('无法在 Android Gradle 文件中找到 release build type');
             }
             text = next;
           }
@@ -274,10 +380,10 @@ jobs:
           fs.writeFileSync(file, text);
           NODE
 
-      - name: Build Android bundle
+      - name: 构建 Android 安装包
         run: pnpm tauri android build --apk --target aarch64 --ci
 
-      - name: Upload Android bundle
+      - name: 上传 Android 安装包
         uses: actions/github-script@v8
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -319,7 +425,7 @@ jobs:
             collect(distDir);
 
             if (files.length === 0) {
-              throw new Error(`No Android APK artifacts found under ${distDir}`);
+              throw new Error(`未在 ${distDir} 下找到 Android APK 产物`);
             }
 
             for (const file of files) {

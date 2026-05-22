@@ -9,7 +9,7 @@ import {
   Typography,
 } from "antd";
 import dayjs from "dayjs";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FormattedMessage } from "react-intl";
 import { useMsgStore } from "../../../models/msgstore";
 import { useWorkflowStore } from "../../../models/workflow";
