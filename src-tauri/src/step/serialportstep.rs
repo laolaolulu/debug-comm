@@ -109,7 +109,13 @@ impl SerialPortStep {
                 let Some(step_msg) = subscription.rx.recv().await else {
                     break;
                 };
-                let payload = value_to_bytes(&step_msg.msg);
+                let payload = match value_to_bytes(&step_msg.msg) {
+                    Ok(payload) => payload,
+                    Err(err) => {
+                        eprintln!("serialportstep ignored invalid message: {err}");
+                        continue;
+                    }
+                };
                 if payload.is_empty() {
                     continue;
                 }

@@ -61,25 +61,3 @@ pub trait StepManifestProvider {
     where
         Self: Sized;
 }
-
-/// 无行为的基础步骤。
-/// 对于暂未实现的节点类型，先实例化成该类型，保证工作流能够完成节点装配。
-#[derive(Debug)]
-pub struct BasicStep {
-    context: BaseStepContext,
-}
-
-impl BasicStep {
-    /// 创建一个无行为的基础步骤实例。
-    pub fn new(node: WorkflowNode, workflow: Arc<Workflow>) -> Arc<Self> {
-        Arc::new(Self {
-            context: BaseStepContext::new(node, workflow),
-        })
-    }
-}
-
-impl BaseStep for BasicStep {
-    fn context(&self) -> &BaseStepContext {
-        &self.context
-    }
-}

@@ -77,7 +77,13 @@ impl TcpClientStep {
                         let Some(step_msg) = inbound else {
                             break;
                         };
-                        let payload = value_to_bytes(&step_msg.msg);
+                        let payload = match value_to_bytes(&step_msg.msg) {
+                            Ok(payload) => payload,
+                            Err(err) => {
+                                eprintln!("tcpclientstep ignored invalid message: {err}");
+                                continue;
+                            }
+                        };
                         if payload.is_empty() {
                             continue;
                         }

@@ -4,7 +4,7 @@ pub mod step;
 use serialport::available_ports;
 
 use serde_json::Value;
-use step::model::{MsgType, WorkflowDefinition};
+use step::model::{value_to_bytes, MsgType, StepManifest, WorkflowDefinition};
 use step::workflow::Workflow;
 use tauri::AppHandle;
 
@@ -42,7 +42,8 @@ fn start_workflow_instance(
 fn publish_step_message(workflow_id: &str, step_id: &str, msg: Value) -> Result<(), String> {
     let workflow =
         Workflow::get(workflow_id).ok_or_else(|| format!("workflow not found: {workflow_id}"))?;
-    workflow.publish(step_id.to_string(), MsgType::Down, msg)?;
+    let payload = value_to_bytes(&msg)?;
+    workflow.publish(step_id.to_string(), MsgType::Down, payload)?;
     Ok(())
 }
 
@@ -51,12 +52,11 @@ fn publish_step_message(workflow_id: &str, step_id: &str, msg: Value) -> Result<
 /// Rust 侧从全局实例集合中移除对应实例，移除后如果没有其他引用，实例会被自动销毁。
 #[tauri::command]
 fn stop_workflow(id: &str) -> Result<(), String> {
-    if Workflow::get(id).is_none() {
-        return Err(format!("workflow not found: {id}"));
+    if Workflow::remove(id) {
+        Ok(())
+    } else {
+        Err(format!("workflow not found: {id}"))
     }
-
-    Workflow::remove(id);
-    Ok(())
 }
 
 /// 获取当前所有执行中的工作流 id 集合。
@@ -69,8 +69,8 @@ fn get_workflow_ids() -> Vec<String> {
 /// 获取所有可创建的步骤类型定义。
 /// 前端 StepList 可直接使用该数据生成拖拽列表。
 #[tauri::command]
-fn get_step_manifests() -> serde_json::Value {
-    serde_json::to_value(Workflow::available_steps()).unwrap_or_default()
+fn get_step_manifests() -> Vec<StepManifest> {
+    Workflow::available_steps()
 }
 
 /// 查询当前系统可用串口列表。
@@ -225,6 +225,60 @@ mod tests {
 
         drop(first);
         drop(second);
+        Workflow::remove(id);
+    }
+
+    #[test]
+    fn unknown_step_type_fails_start() {
+        let _guard = test_lock();
+        let id = "test-unknown-step";
+        Workflow::remove(id);
+
+        let json = json!({
+            "id": id,
+            "name": "unknown step workflow",
+            "nodes": [
+                {
+                    "id": "unknown-1",
+                    "type": "UnknownStep",
+                    "position": { "x": 0.0, "y": 0.0 },
+                    "data": {
+                        "name": "Unknown"
+                    }
+                }
+            ],
+            "edges": []
+        })
+        .to_string();
+
+        let result = start_workflow_instance(&json, None);
+
+        assert!(
+            matches!(result, Err(error) if error.contains("unsupported step type: UnknownStep"))
+        );
+        assert!(!Workflow::list_ids().contains(&id.to_string()));
+    }
+
+    #[test]
+    fn stop_workflow_reports_missing_ids() {
+        let _guard = test_lock();
+        let id = "test-stop-missing";
+        Workflow::remove(id);
+
+        assert!(stop_workflow(id).is_err());
+    }
+
+    #[test]
+    fn stop_workflow_removes_running_instance() {
+        let _guard = test_lock();
+        let id = "test-stop-existing";
+        Workflow::remove(id);
+        let workflow = start_workflow_instance(&workflow_json(id), None).unwrap();
+
+        assert!(stop_workflow(id).is_ok());
+        assert!(!Workflow::list_ids().contains(&id.to_string()));
+
+        drop(workflow);
         Workflow::remove(id);
     }
 }

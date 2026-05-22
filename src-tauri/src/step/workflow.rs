@@ -1,4 +1,4 @@
-use crate::step::basestep::{BaseStep, BasicStep, StepManifestProvider};
+use crate::step::basestep::{BaseStep, StepManifestProvider};
 use crate::step::disinputstep::DisInputStep;
 use crate::step::disoutputstep::DisOutputStep;
 use crate::step::model::WorkflowNode;
@@ -79,12 +79,6 @@ impl Workflow {
             steps: RwLock::new(HashMap::new()),
             app: Some(app),
         })
-    }
-
-    /// 使用前端工作流设计器导出的 JSON 字符串创建工作流实例。
-    pub fn from_json(json: &str) -> serde_json::Result<Arc<Self>> {
-        let definition = serde_json::from_str::<WorkflowDefinition>(json)?;
-        Ok(Self::new(definition))
     }
 
     /// 获取当前工作流 id。
@@ -243,14 +237,6 @@ impl Workflow {
         registry.get(id).cloned()
     }
 
-    /// 获取当前仍然存活的全部工作流实例。
-    pub fn list() -> Vec<Arc<Self>> {
-        workflow_instances()
-            .read()
-            .map(|registry| registry.values().cloned().collect())
-            .unwrap_or_default()
-    }
-
     /// 获取当前全局实例集合中的全部工作流 id。
     pub fn list_ids() -> Vec<String> {
         workflow_instances()
@@ -261,7 +247,7 @@ impl Workflow {
 
     /// 按 id 从全局实例集合中移除工作流。
     /// 该方法既可手动调用，也会在 Drop 时自动执行。
-    pub fn remove(id: &str) {
+    pub fn remove(id: &str) -> bool {
         // 注意不要在持有注册表写锁时 drop Workflow。
         // Workflow::drop 里也会尝试注销自身，如果 remove 的 Arc 在锁内被释放，
         // 就可能产生同一线程重复申请写锁的问题。
@@ -269,10 +255,12 @@ impl Workflow {
             .write()
             .ok()
             .and_then(|mut registry| registry.remove(id));
+        let existed = removed.is_some();
         if let Some(workflow) = removed.as_ref() {
             workflow.shutdown();
         }
         drop(removed);
+        existed
     }
 
     /// 将新创建的工作流注册到全局实例集合中。
@@ -313,10 +301,7 @@ impl Workflow {
                 let step: Arc<dyn BaseStep> = TcpServerStep::new(node, Arc::clone(self))?;
                 Ok(step)
             }
-            _ => {
-                let step: Arc<dyn BaseStep> = BasicStep::new(node, Arc::clone(self));
-                Ok(step)
-            }
+            _ => Err(format!("unsupported step type: {}", node.r#type)),
         }
     }
 

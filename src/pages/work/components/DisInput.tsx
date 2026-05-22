@@ -175,16 +175,17 @@ const InputPanel = ({ node }: { node: WorkflowNode }) => {
               try {
                 const payload =
                   mode === 'hex' ? parseHex(value, hexMessages) : value;
+                const msg = payloadToBytes(payload);
                 await invoke('publish_step_message', {
                   workflowId: select.id,
                   stepId: node.id,
-                  msg: payload,
+                  msg: Array.from(msg),
                 });
                 await appendMessage({
                   taskId: select.id,
                   stepId: node.id,
                   stepBy: node.id,
-                  msg: payloadToBytes(payload),
+                  msg,
                   time: Date.now(),
                 });
                 message.success(

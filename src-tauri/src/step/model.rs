@@ -61,9 +61,7 @@ impl WorkflowNodeData {
         let mut map = serde_json::Map::<String, Value>::new();
 
         // name/description 是所有节点的公共字段，先放入参数对象。
-        // 同时写入 label 是为了兼容旧步骤 data 结构和前端历史字段。
         map.insert("name".to_string(), Value::String(self.name.clone()));
-        map.insert("label".to_string(), Value::String(self.name.clone()));
         map.insert(
             "description".to_string(),
             Value::String(self.description.clone()),
@@ -104,17 +102,45 @@ impl WorkflowNodeData {
 /// 将通用 JSON 消息体转换为底层通信步骤使用的 byte[]。
 ///
 /// 约定：
-/// - 字符串按 UTF-8 写入。
 /// - 数字数组按 byte[] 写入。
-/// - 其他 JSON 值序列化成 JSON 文本字节。
-pub fn value_to_bytes(value: &Value) -> Vec<u8> {
-    match value {
-        Value::String(text) => text.as_bytes().to_vec(),
-        Value::Array(items) => items
-            .iter()
-            .filter_map(|item| item.as_u64().and_then(|v| u8::try_from(v).ok()))
-            .collect(),
-        _ => serde_json::to_vec(value).unwrap_or_default(),
+/// - 其他 JSON 值一律拒绝，由调用方明确处理错误。
+pub fn value_to_bytes(value: &Value) -> Result<Vec<u8>, String> {
+    let Value::Array(items) = value else {
+        return Err("message must be a byte array".to_string());
+    };
+
+    items
+        .iter()
+        .enumerate()
+        .map(|(index, item)| {
+            let Some(value) = item.as_u64() else {
+                return Err(format!("message byte at index {index} is not an integer"));
+            };
+            u8::try_from(value)
+                .map_err(|_| format!("message byte out of range at index {index}: {value}"))
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn value_to_bytes_accepts_byte_arrays() {
+        assert_eq!(
+            value_to_bytes(&json!([0, 1, 255])).unwrap(),
+            vec![0, 1, 255]
+        );
+    }
+
+    #[test]
+    fn value_to_bytes_rejects_unsupported_values() {
+        assert!(value_to_bytes(&json!("hello")).is_err());
+        assert!(value_to_bytes(&json!({ "value": [1, 2] })).is_err());
+        assert!(value_to_bytes(&json!([256])).is_err());
+        assert!(value_to_bytes(&json!([1.5])).is_err());
     }
 }
 

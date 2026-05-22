@@ -23,7 +23,7 @@
 ## 工作流执行逻辑
 
 1. 前端传入工作流 JSON。
-2. `Workflow::from_json` 将 JSON 反序列化为 `WorkflowDefinition`。
+2. `start_workflow` 将 JSON 反序列化为 `WorkflowDefinition`。
 3. `Workflow::new` 创建工作流实例：
    - 保存前端传入的工作流定义。
    - 创建当前工作流专属的 `broadcast::Sender<StepMsg<Value>>`。
@@ -32,7 +32,7 @@
    - `sort_nodes` 根据 `edges` 做拓扑排序，上游节点优先实例化。
    - 每个节点通过 `instantiate_step` 按 `node.type` 创建对应步骤。
    - 已实现的类型会创建具体步骤，例如 `serialportstep`、`disoutputstep`。
-   - 未实现或未知类型会退化为 `BasicStep`，保证工作流节点不会因为类型缺失而丢失。
+   - 未实现或未知类型会直接返回错误，避免工作流带着无行为节点继续运行。
    - 创建完成后的步骤实例保存到 `Workflow.steps`，由工作流持有生命周期。
 5. 具体步骤在构造函数中启动自己的运行逻辑：
    - 例如 `SerialPortStep` 会打开串口，并启动写串口任务和读串口任务。
@@ -110,11 +110,6 @@ disinputstep -> serialportstep -> disoutputstep
 - 合并节点 data 中的扩展字段。
 - 最后反序列化为具体步骤的 data 结构，例如 `SerialPortStepData`。
 
-实现备注：
-
-- 当前步骤参数结构已统一使用 `name/description`。
-- `WorkflowNodeData::parse` 会额外写入兼容字段 `label`，用于兼容旧节点数据或旧前端字段。
-
 ## 文件说明
 
 ### `workflow.rs`
@@ -164,7 +159,6 @@ disinputstep -> serialportstep -> disoutputstep
 - `BaseStepContext`：步骤基础上下文，保存当前节点定义和所属工作流的弱引用。
 - `BaseStep`：所有步骤都要实现的公共 trait，提供 `context`、`id`、`node_type` 等基础能力。
 - `StepManifestProvider`：步骤元数据提供者，用于导出前端可创建的步骤类型和默认配置。
-- `BasicStep`：无行为步骤，用于承载暂未实现的节点类型。
 
 设计要点：
 
@@ -347,8 +341,8 @@ TCP 服务端步骤。
 
 ## 后续优化建议
 
-- 统一节点显示字段：当前已改为 `name/description`，同时 `WorkflowNodeData::parse` 兼容写入旧字段 `label`。
-- 统一消息体格式：建议底层通信类步骤统一使用 `byte[]`
+- 统一节点显示字段：当前使用 `name/description`。
+- 统一消息体格式：底层通信类步骤只接受 `byte[]`。
 - 完善拆包策略：串口、TCP client、TCP server 已支持结束符，后续可继续补固定长度、超时归包等策略。
 - 完善状态上报：当前连接失败、读写失败主要表现为后台任务退出，后续可增加步骤状态和错误事件。
 
