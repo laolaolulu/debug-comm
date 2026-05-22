@@ -18,17 +18,11 @@ import { useWorkflowStore } from '../../../models/workflow';
 
 export const payloadToBytes = (value: unknown): Uint8Array => {
   if (Array.isArray(value)) {
-    return new Uint8Array(
-      value.filter((byte): byte is number => typeof byte === 'number'),
-    );
+    return new Uint8Array(value as number[]);
   }
-
   if (typeof value === 'string') {
     return new TextEncoder().encode(value);
   }
-
-  // IndexedDB 只保存 byte[]，这样 UTF-8/HEX 两种显示模式能复用同一份数据。
-  // 对象类消息先序列化为 JSON 文本，再按 UTF-8 字节保存。
   return new TextEncoder().encode(JSON.stringify(value));
 };
 
@@ -59,16 +53,7 @@ const parseHex = (
   if (!/^[0-9a-fA-F]+$/.test(normalized)) {
     throw new Error(messages.invalidByte(normalized));
   }
-
-  return (
-    normalized.match(/.{2}/g)?.map((part) => {
-      const byte = Number.parseInt(part, 16);
-      if (Number.isNaN(byte)) {
-        throw new Error(messages.invalidByte(part));
-      }
-      return byte;
-    }) ?? []
-  );
+  return normalized.match(/.{2}/g)!.map((part) => Number.parseInt(part, 16));
 };
 
 const decodeHex = (
@@ -171,9 +156,6 @@ const InputPanel = ({ node }: { node: WorkflowNode }) => {
             icon={<ClearOutlined />}
             disabled={!select || messageCount === 0}
             onClick={async () => {
-              if (!select) {
-                return;
-              }
               try {
                 await clearStep(select.id, node.id);
               } catch (error) {
@@ -194,9 +176,6 @@ const InputPanel = ({ node }: { node: WorkflowNode }) => {
             icon={<SendOutlined />}
             disabled={!value.trim() || !select}
             onClick={async () => {
-              if (!select) {
-                return;
-              }
               try {
                 const payload =
                   mode === 'hex' ? parseHex(value, hexMessages) : value;

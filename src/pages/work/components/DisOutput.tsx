@@ -14,6 +14,13 @@ import { FormattedMessage } from "react-intl";
 import { useMsgStore } from "../../../models/msgstore";
 import { useWorkflowStore } from "../../../models/workflow";
 
+const textDecoder = new TextDecoder();
+
+const bytesToHex = (bytes: Uint8Array) =>
+  Array.from(bytes, (byte) =>
+    byte.toString(16).padStart(2, "0").toUpperCase(),
+  ).join(" ");
+
 const getRelatedSendStepIds = (workflow: Workflow, outputStepId: string) => {
   const lowerStepIds = new Set(
     workflow.edges
@@ -43,40 +50,28 @@ const OutputPanel = ({
   const [mode, setMode] = useState<string>("utf-8");
   const { msgdata, clearStep } = useMsgStore();
 
-  const sendStepIds = useMemo(
-    () => getRelatedSendStepIds(workflow, node.id),
-    [node.id, workflow],
-  );
+  const { items, sendStepIdSet, nodeNameById } = useMemo(() => {
+    const sendStepIds = getRelatedSendStepIds(workflow, node.id);
+    const sessionStepIdSet = new Set([node.id, ...sendStepIds]);
+    const sendStepIdSet = new Set(sendStepIds);
+    const nodeNameById = new Map(
+      workflow.nodes.map((workflowNode) => [
+        workflowNode.id,
+        workflowNode.data.name || workflowNode.id,
+      ]),
+    );
+    const items = msgdata
+      .filter(
+        (item) =>
+          item.taskId === workflow.id && sessionStepIdSet.has(item.stepId),
+      )
+      .sort((a, b) => a.time - b.time);
 
-  const sessionStepIds = useMemo(
-    () => [node.id, ...getRelatedSendStepIds(workflow, node.id)],
-    [node.id, workflow],
-  );
-  const sendStepIdSet = useMemo(() => new Set(sendStepIds), [sendStepIds]);
-  const nodeNameById = useMemo(
-    () =>
-      new Map(
-        workflow.nodes.map((workflowNode) => [
-          workflowNode.id,
-          workflowNode.data.name || workflowNode.id,
-        ]),
-      ),
-    [workflow.nodes],
-  );
+    return { items, sendStepIdSet, nodeNameById };
+  }, [msgdata, node.id, workflow]);
 
   const receiveCount = useMsgStore(
     (state) => state.msgcount[workflow.id]?.[node.id] ?? 0,
-  );
-  const items = useMemo(
-    () =>
-      msgdata
-        .filter(
-          (item) =>
-            item.taskId === workflow.id && sessionStepIds.includes(item.stepId),
-        )
-        .sort((a, b) => a.time - b.time),
-
-    [msgdata, sessionStepIds],
   );
 
   useEffect(() => {
@@ -181,12 +176,8 @@ const OutputPanel = ({
                   </Flex>
                   <div style={{ marginTop: 4 }}>
                     {mode === "hex"
-                      ? [...item.msg]
-                          .map((byte) =>
-                            byte.toString(16).padStart(2, "0").toUpperCase(),
-                          )
-                          .join(" ")
-                      : new TextDecoder().decode(item.msg)}
+                      ? bytesToHex(item.msg)
+                      : textDecoder.decode(item.msg)}
                   </div>
                 </div>
               </div>
