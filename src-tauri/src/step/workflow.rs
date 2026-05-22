@@ -3,6 +3,7 @@ use crate::step::disinputstep::DisInputStep;
 use crate::step::disoutputstep::DisOutputStep;
 use crate::step::model::WorkflowNode;
 use crate::step::model::{MsgType, StepManifest, StepMsg, WorkflowDefinition, WorkflowEdge};
+#[cfg(not(target_os = "android"))]
 use crate::step::serialportstep::SerialPortStep;
 use crate::step::tcpclientstep::TcpClientStep;
 use crate::step::tcpserverstep::TcpServerStep;
@@ -43,13 +44,15 @@ pub struct Workflow {
 impl Workflow {
     /// 返回当前后端支持的所有步骤类型定义。
     pub fn available_steps() -> Vec<StepManifest> {
-        vec![
+        let mut steps = vec![
             DisInputStep::manifest(),
             DisOutputStep::manifest(),
-            SerialPortStep::manifest(),
             TcpClientStep::manifest(),
             TcpServerStep::manifest(),
-        ]
+        ];
+        #[cfg(not(target_os = "android"))]
+        steps.push(SerialPortStep::manifest());
+        steps
     }
 
     /// 使用工作流定义创建实例，并自动注册到全局实例集合中。
@@ -292,8 +295,15 @@ impl Workflow {
                 Ok(step)
             }
             "serialportstep" => {
-                let step: Arc<dyn BaseStep> = SerialPortStep::new(node, Arc::clone(self))?;
-                Ok(step)
+                #[cfg(not(target_os = "android"))]
+                {
+                    let step: Arc<dyn BaseStep> = SerialPortStep::new(node, Arc::clone(self))?;
+                    Ok(step)
+                }
+                #[cfg(target_os = "android")]
+                {
+                    Err("serialportstep is not available on Android".to_string())
+                }
             }
             "tcpclientstep" => {
                 let step: Arc<dyn BaseStep> = TcpClientStep::new(node, Arc::clone(self))?;
