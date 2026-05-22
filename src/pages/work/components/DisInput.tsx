@@ -16,18 +16,20 @@ import { FormattedMessage, useIntl } from 'react-intl';
 import { useMsgStore } from '../../../models/msgstore';
 import { useWorkflowStore } from '../../../models/workflow';
 
-export const payloadToBytes = (value: unknown): number[] => {
+export const payloadToBytes = (value: unknown): Uint8Array => {
   if (Array.isArray(value)) {
-    return value.filter((byte): byte is number => typeof byte === 'number');
+    return new Uint8Array(
+      value.filter((byte): byte is number => typeof byte === 'number'),
+    );
   }
 
   if (typeof value === 'string') {
-    return [...new TextEncoder().encode(value)];
+    return new TextEncoder().encode(value);
   }
 
   // IndexedDB 只保存 byte[]，这样 UTF-8/HEX 两种显示模式能复用同一份数据。
   // 对象类消息先序列化为 JSON 文本，再按 UTF-8 字节保存。
-  return [...new TextEncoder().encode(JSON.stringify(value))];
+  return new TextEncoder().encode(JSON.stringify(value));
 };
 
 type InputMode = 'utf-8' | 'hex';
@@ -35,7 +37,7 @@ type InputMode = 'utf-8' | 'hex';
 const HEX_SEPARATOR_PATTERN = /[\s,;:\-_]/g;
 const HEX_ALLOWED_PATTERN = /[^0-9a-fA-F\s,;:\-_]/g;
 
-const bytesToHexInput = (bytes: Uint8Array | number[]) =>
+const bytesToHexInput = (bytes: Uint8Array) =>
   [...bytes]
     .map((byte) => byte.toString(16).padStart(2, '0').toUpperCase())
     .join(' ');

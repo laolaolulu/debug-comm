@@ -1,4 +1,4 @@
-import { ClearOutlined } from '@ant-design/icons';
+import { ClearOutlined } from "@ant-design/icons";
 import {
   Button,
   Empty,
@@ -7,12 +7,12 @@ import {
   Space,
   Splitter,
   Typography,
-} from 'antd';
-import dayjs from 'dayjs';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FormattedMessage } from 'react-intl';
-import { useMsgStore } from '../../../models/msgstore';
-import { useWorkflowStore } from '../../../models/workflow';
+} from "antd";
+import dayjs from "dayjs";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormattedMessage } from "react-intl";
+import { useMsgStore } from "../../../models/msgstore";
+import { useWorkflowStore } from "../../../models/workflow";
 
 const getRelatedSendStepIds = (workflow: Workflow, outputStepId: string) => {
   const lowerStepIds = new Set(
@@ -27,7 +27,7 @@ const getRelatedSendStepIds = (workflow: Workflow, outputStepId: string) => {
       workflow.edges
         .filter((edge) => lowerStepIds.has(edge.target))
         .map((edge) => edge.source)
-        .filter((stepId) => nodeById.get(stepId)?.type === 'DisInputStep'),
+        .filter((stepId) => nodeById.get(stepId)?.type === "DisInputStep"),
     ),
   ];
 };
@@ -40,14 +40,17 @@ const OutputPanel = ({
   workflow: Workflow;
 }) => {
   const listRef = useRef<HTMLDivElement | null>(null);
-  const [mode, setMode] = useState<string>('utf-8');
+  const [mode, setMode] = useState<string>("utf-8");
+  const { msgdata, clearStep } = useMsgStore();
+
   const sendStepIds = useMemo(
     () => getRelatedSendStepIds(workflow, node.id),
     [node.id, workflow],
   );
+
   const sessionStepIds = useMemo(
-    () => [node.id, ...sendStepIds],
-    [node.id, sendStepIds],
+    () => [node.id, ...getRelatedSendStepIds(workflow, node.id)],
+    [node.id, workflow],
   );
   const sendStepIdSet = useMemo(() => new Set(sendStepIds), [sendStepIds]);
   const nodeNameById = useMemo(
@@ -60,7 +63,7 @@ const OutputPanel = ({
       ),
     [workflow.nodes],
   );
-  const { msgdata, clearStep } = useMsgStore();
+
   const receiveCount = useMsgStore(
     (state) => state.msgcount[workflow.id]?.[node.id] ?? 0,
   );
@@ -76,45 +79,41 @@ const OutputPanel = ({
     [msgdata, sessionStepIds],
   );
 
-  const scrollToBottom = useCallback(() => {
+  useEffect(() => {
     requestAnimationFrame(() => {
       const list = listRef.current;
       if (list) {
         list.scrollTop = list.scrollHeight;
       }
     });
-  }, []);
-
-  useEffect(() => {
-    scrollToBottom();
   }, [items.length]);
 
   return (
     <div
       style={{
-        height: 'calc(100% - 10px)',
-        display: 'flex',
-        flexDirection: 'column',
-        margin: '0 10px 10px 10px',
-        padding: '10px 12px',
-        background: '#fff',
-        border: '1px solid #d9d9d9',
+        height: "calc(100% - 10px)",
+        display: "flex",
+        flexDirection: "column",
+        margin: "0 10px 10px 10px",
+        padding: "10px 12px",
+        background: "#fff",
+        border: "1px solid #d9d9d9",
         borderRadius: 8,
-        boxShadow: '0 1px 4px rgba(15, 23, 42, 0.04)',
+        boxShadow: "0 1px 4px rgba(15, 23, 42, 0.04)",
         minHeight: 0,
       }}
     >
-      <Flex justify='space-between' align='center' gap={8}>
+      <Flex justify="space-between" align="center" gap={8}>
         <Typography.Text
           ellipsis
-          style={{ color: '#1677ff', fontSize: 13, maxWidth: 180 }}
+          style={{ color: "#1677ff", fontSize: 13, maxWidth: 180 }}
         >
           {node.data.name}
         </Typography.Text>
         <Space>
           <Segmented
             value={mode}
-            options={['utf-8', 'hex']}
+            options={["utf-8", "hex"]}
             onChange={(next) => setMode(next)}
           />
           <Button
@@ -125,8 +124,8 @@ const OutputPanel = ({
             }}
           >
             <FormattedMessage
-              id='work.output.clearWithCount'
-              defaultMessage='清空 ({count})'
+              id="work.output.clearWithCount"
+              defaultMessage="清空 ({count})"
               values={{ count: receiveCount }}
             />
           </Button>
@@ -138,11 +137,11 @@ const OutputPanel = ({
         style={{
           flex: 1,
           minHeight: 0,
-          overflow: 'auto',
+          overflow: "auto",
           marginTop: 10,
           paddingRight: 4,
           fontFamily:
-            'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+            "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
           fontSize: 12,
         }}
       >
@@ -155,39 +154,39 @@ const OutputPanel = ({
               <div
                 key={index}
                 style={{
-                  borderBottom: '1px solid #f0f0f0',
-                  padding: '7px 0',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                  display: 'flex',
-                  justifyContent: isSend ? 'flex-end' : 'flex-start',
+                  borderBottom: "1px solid #f0f0f0",
+                  padding: "7px 0",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                  display: "flex",
+                  justifyContent: isSend ? "flex-end" : "flex-start",
                 }}
               >
                 <div
                   style={{
-                    maxWidth: '78%',
-                    padding: '6px 8px',
-                    border: `1px solid ${isSend ? '#ffd8bf' : '#d6e4ff'}`,
+                    maxWidth: "78%",
+                    padding: "6px 8px",
+                    border: `1px solid ${isSend ? "#ffd8bf" : "#d6e4ff"}`,
                     borderRadius: 6,
-                    background: isSend ? '#fff7e6' : '#f0f5ff',
+                    background: isSend ? "#fff7e6" : "#f0f5ff",
                   }}
                 >
-                  <Flex justify='space-between' gap={8} wrap='wrap'>
-                    <Typography.Text type='secondary' style={{ fontSize: 11 }}>
-                      {dayjs(item.time).format('YYYY-MM-DD HH:mm:ss.SSS')}
+                  <Flex justify="space-between" gap={8} wrap="wrap">
+                    <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+                      {dayjs(item.time).format("YYYY-MM-DD HH:mm:ss.SSS")}
                     </Typography.Text>
-                    <Typography.Text type='secondary' style={{ fontSize: 11 }}>
+                    <Typography.Text type="secondary" style={{ fontSize: 11 }}>
                       {nodeNameById.get(item.stepBy)} · {item.msg.length} B
                     </Typography.Text>
                   </Flex>
                   <div style={{ marginTop: 4 }}>
-                    {mode === 'hex'
-                      ? item.msg
+                    {mode === "hex"
+                      ? [...item.msg]
                           .map((byte) =>
-                            byte.toString(16).padStart(2, '0').toUpperCase(),
+                            byte.toString(16).padStart(2, "0").toUpperCase(),
                           )
-                          .join(' ')
-                      : new TextDecoder().decode(new Uint8Array(item.msg))}
+                          .join(" ")
+                      : new TextDecoder().decode(item.msg)}
                   </div>
                 </div>
               </div>
@@ -202,12 +201,12 @@ const OutputPanel = ({
 export default () => {
   const select = useWorkflowStore((state) => state.select);
   const nodes =
-    select?.nodes.filter((node) => node.type === 'DisOutputStep') ?? [];
+    select?.nodes.filter((node) => node.type === "DisOutputStep") ?? [];
 
   return nodes.length === 0 ? (
     <Empty />
   ) : (
-    <Splitter style={{ height: '100%' }}>
+    <Splitter style={{ height: "100%" }}>
       {nodes.map((node) => (
         <Splitter.Panel key={node.id}>
           <OutputPanel node={node} workflow={select} />

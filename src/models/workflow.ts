@@ -25,10 +25,13 @@ export const useWorkflowIsChange = () =>
   });
 
 interface WorkflowState {
+  /**当前选中的任务 */
   select: Workflow;
+  /**切换选中的任务 */
+  setSelect: (select: Workflow) => void;
+  /**所有任务 */
   workflows: Workflow[];
 
-  setSelect: (select: Workflow) => void;
   createWorkflow: (templateId?: string | null) => void;
   importWorkflow: (workflow: Workflow) => Workflow;
   save: () => void;

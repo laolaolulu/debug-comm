@@ -1,31 +1,32 @@
-import { listen } from '@tauri-apps/api/event';
-import Dexie, { type Table } from 'dexie';
-import { create } from 'zustand';
+import { listen } from "@tauri-apps/api/event";
+import Dexie, { type Table } from "dexie";
+import { create } from "zustand";
 
-const DB_NAME = 'debug-com-msg';
+const DB_NAME = "debug-com-msg";
 const OLDER_PAGE_SIZE = 100;
 
 export type MsgData = {
   taskId: string;
   stepId: string;
   stepBy: string;
-  msg: number[];
+  msg: Uint8Array;
   time: number;
 };
 
-type StoredMsgData = MsgData & {
-  id?: number;
-};
-
 class MsgDatabase extends Dexie {
-  msgdata!: Table<StoredMsgData, number>;
+  msgdata!: Table<
+    MsgData & {
+      id?: number;
+    },
+    number
+  >;
 
   constructor() {
     super(DB_NAME);
 
     // `++` 使用 autoIncrement 主键，MsgData 不需要暴露业务 id。
     this.version(1).stores({
-      msgdata: '++,by_task_step_time,[taskId+stepId+time]',
+      msgdata: "++,by_task_step_time,[taskId+stepId+time]",
     });
   }
 }
@@ -45,28 +46,23 @@ type MsgState = {
 
 const db = new MsgDatabase();
 
-const readLatestMessagesGroupByStep = async (limit: number) => {
+const readLatestMessagesGroupByStep = async () => {
   const rows: Record<string, Record<string, MsgData[]>> = {};
   const counts: Record<string, Record<string, number>> = {};
 
   await db.msgdata
-    .orderBy('[taskId+stepId+time]')
+    .orderBy("[taskId+stepId+time]")
     .reverse()
-    .each(({ taskId, stepId, stepBy, msg, time }) => {
+    .each((data) => {
+      const { taskId, stepId } = data;
       counts[taskId] = counts[taskId] ?? {};
       counts[taskId][stepId] = (counts[taskId][stepId] ?? 0) + 1;
 
       rows[taskId] = rows[taskId] ?? {};
       rows[taskId][stepId] = rows[taskId][stepId] ?? [];
 
-      if (rows[taskId][stepId].length < limit) {
-        rows[taskId][stepId].unshift({
-          taskId,
-          stepId,
-          stepBy: stepBy ?? stepId,
-          msg,
-          time,
-        });
+      if (rows[taskId][stepId].length < OLDER_PAGE_SIZE) {
+        rows[taskId][stepId].unshift(data);
       }
     });
 
@@ -105,7 +101,7 @@ export const useMsgStore = create<MsgState>((set, get) => ({
 
   clearStep: async (taskId, stepId) => {
     await db.msgdata
-      .where('[taskId+stepId+time]')
+      .where("[taskId+stepId+time]")
       .between([taskId, stepId, Dexie.minKey], [taskId, stepId, Dexie.maxKey])
       .delete();
     set((state) => ({
@@ -122,12 +118,11 @@ export const useMsgStore = create<MsgState>((set, get) => ({
     }));
   },
   hydrate: async () => {
-    await listen<MsgData>('workflow-step-message', ({ payload }) => {
+    await listen<MsgData>("workflow-step-message", ({ payload }) => {
       void get().appendMessage(payload);
     });
 
-    const { msgdata, counts } =
-      await readLatestMessagesGroupByStep(OLDER_PAGE_SIZE);
+    const { msgdata, counts } = await readLatestMessagesGroupByStep();
 
     set({
       msgdata,
