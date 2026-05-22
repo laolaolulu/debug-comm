@@ -71,15 +71,13 @@ export default () => {
     (step: StepManifest, screenPosition: XYPosition) => {
       const flow = document.querySelector(".react-flow");
       const flowRect = flow?.getBoundingClientRect();
-      const isInFlow =
+      if (
         flowRect &&
         screenPosition.x >= flowRect.left &&
         screenPosition.x <= flowRect.right &&
         screenPosition.y >= flowRect.top &&
-        screenPosition.y <= flowRect.bottom;
-
-      // Create a new node and add it to the flow
-      if (isInFlow) {
+        screenPosition.y <= flowRect.bottom
+      ) {
         const position = screenToFlowPosition(screenPosition);
 
         const newNode: WorkflowNode = {
@@ -100,7 +98,7 @@ export default () => {
   );
 
   return (
-    <Flex vertical style={{}}>
+    <Flex vertical>
       <Flex justify="space-between" style={{ margin: "15px 15px 5px 15px" }}>
         <Typography.Text strong>
           <FormattedMessage id="step.list.title" defaultMessage="工作流节点" />

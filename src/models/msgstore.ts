@@ -79,24 +79,16 @@ export const useMsgStore = create<MsgState>((set, get) => ({
   msgcount: {},
   appendMessage: async (record) => {
     await db.msgdata.add(record);
-    set((state) => {
-      const current = state.msgdata.filter(
-        (item) =>
-          item.taskId === record.taskId && item.stepId === record.stepId,
-      );
-      return {
-        msgdata: [...state.msgdata, record].sort((a, b) => a.time - b.time),
-        msgcount: {
-          ...state.msgcount,
-          [record.taskId]: {
-            ...(state.msgcount[record.taskId] ?? {}),
-            [record.stepId]:
-              (state.msgcount[record.taskId]?.[record.stepId] ??
-                current.length) + 1,
-          },
+    set((state) => ({
+      msgdata: [...state.msgdata, record].sort((a, b) => a.time - b.time),
+      msgcount: {
+        ...state.msgcount,
+        [record.taskId]: {
+          ...(state.msgcount[record.taskId] ?? {}),
+          [record.stepId]: (state.msgcount[record.taskId]?.[record.stepId] ?? 0) + 1,
         },
-      };
-    });
+      },
+    }));
   },
 
   clearStep: async (taskId, stepId) => {

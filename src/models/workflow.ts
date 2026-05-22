@@ -116,10 +116,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
   hydrate: async () => {
     const stored = await getStoreValue<Workflow[]>(WORKFLOWS_STORAGE_KEY, []);
-    const workflows =
-      Array.isArray(stored) && stored.length > 0
-        ? stored
-        : [createBlankWorkflow()];
+    const workflows = stored.length > 0 ? stored : [createBlankWorkflow()];
     const selectedId = await getStoreValue<string | undefined>(
       SELECT_WORKFLOW_STORAGE_KEY,
       undefined,
@@ -131,12 +128,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       workflows,
     });
 
-    if (!Array.isArray(stored) || stored.length === 0) {
+    if (stored.length === 0) {
       void setStoreValue(WORKFLOWS_STORAGE_KEY, workflows);
     }
-    if (select?.id) {
-      void setStoreValue(SELECT_WORKFLOW_STORAGE_KEY, select.id);
-    }
+    void setStoreValue(SELECT_WORKFLOW_STORAGE_KEY, select.id);
   },
 }));
 

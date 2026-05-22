@@ -191,8 +191,7 @@ const OutputPanel = ({
 
 export default () => {
   const select = useWorkflowStore((state) => state.select);
-  const nodes =
-    select?.nodes.filter((node) => node.type === "DisOutputStep") ?? [];
+  const nodes = select.nodes.filter((node) => node.type === "DisOutputStep");
 
   return nodes.length === 0 ? (
     <Empty />

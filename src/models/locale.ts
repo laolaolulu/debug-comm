@@ -16,9 +16,7 @@ export const useLocaleStore = create<{
   // 从 Tauri Store 恢复用户选择。
   hydrate: async () => {
     const locale = await getStoreValue<string>(LOCALE_STORAGE_KEY, "zh-CN");
-    if (locale) {
-      set({ locale });
-    }
+    set({ locale });
   },
 
   // 更新语言后写入 Tauri Store，刷新页面仍保持用户选择。

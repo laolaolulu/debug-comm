@@ -18,7 +18,7 @@ export default () => {
 
   return (
     <Select
-      value={select?.id}
+      value={select.id}
       style={{ width: 200 }}
       options={workflows.map((m) => ({
         value: m.id,

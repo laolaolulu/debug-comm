@@ -149,10 +149,8 @@ export default () => {
             defaultMessage="删除模板"
           />
         ),
-        disabled: !select,
         icon: <DeleteOutlined />,
         onClick: async () => {
-          if (!select) return;
           const confirmed = await modal.confirm({
             title: (
               <FormattedMessage
@@ -202,11 +200,8 @@ export default () => {
             defaultMessage="从当前模板"
           />
         ),
-        disabled: !select,
         icon: <FileTextOutlined />,
-        onClick: () => {
-          if (select) createWorkflow(select.id);
-        },
+        onClick: () => createWorkflow(select.id),
       },
       { type: "divider" },
       {

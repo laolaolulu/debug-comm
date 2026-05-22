@@ -16,15 +16,11 @@ import { FormattedMessage, useIntl } from 'react-intl';
 import { useMsgStore } from '../../../models/msgstore';
 import { useWorkflowStore } from '../../../models/workflow';
 
-export const payloadToBytes = (value: unknown): Uint8Array => {
-  if (Array.isArray(value)) {
-    return new Uint8Array(value as number[]);
-  }
-  if (typeof value === 'string') {
-    return new TextEncoder().encode(value);
-  }
-  return new TextEncoder().encode(JSON.stringify(value));
-};
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
+
+export const payloadToBytes = (value: string | number[]): Uint8Array =>
+  typeof value === 'string' ? textEncoder.encode(value) : new Uint8Array(value);
 
 type InputMode = 'utf-8' | 'hex';
 
@@ -32,7 +28,7 @@ const HEX_SEPARATOR_PATTERN = /[\s,;:\-_]/g;
 const HEX_ALLOWED_PATTERN = /[^0-9a-fA-F\s,;:\-_]/g;
 
 const bytesToHexInput = (bytes: Uint8Array) =>
-  [...bytes]
+  Array.from(bytes)
     .map((byte) => byte.toString(16).padStart(2, '0').toUpperCase())
     .join(' ');
 
@@ -59,7 +55,7 @@ const parseHex = (
 const decodeHex = (
   value: string,
   messages: { oddLength: string; invalidByte: (part: string) => string },
-) => new TextDecoder().decode(new Uint8Array(parseHex(value, messages)));
+) => textDecoder.decode(new Uint8Array(parseHex(value, messages)));
 
 const InputPanel = ({ node }: { node: WorkflowNode }) => {
   const { message } = App.useApp();
@@ -94,7 +90,7 @@ const InputPanel = ({ node }: { node: WorkflowNode }) => {
 
     try {
       if (next === 'hex') {
-        setValue(bytesToHexInput(new TextEncoder().encode(value)));
+        setValue(bytesToHexInput(textEncoder.encode(value)));
       } else {
         setValue(decodeHex(value, hexMessages));
       }
@@ -154,7 +150,7 @@ const InputPanel = ({ node }: { node: WorkflowNode }) => {
           />
           <Button
             icon={<ClearOutlined />}
-            disabled={!select || messageCount === 0}
+            disabled={messageCount === 0}
             onClick={async () => {
               try {
                 await clearStep(select.id, node.id);
@@ -174,7 +170,7 @@ const InputPanel = ({ node }: { node: WorkflowNode }) => {
           <Button
             type='primary'
             icon={<SendOutlined />}
-            disabled={!value.trim() || !select}
+            disabled={!value.trim()}
             onClick={async () => {
               try {
                 const payload =
@@ -213,8 +209,7 @@ const InputPanel = ({ node }: { node: WorkflowNode }) => {
 export default () => {
   const select = useWorkflowStore((state) => state.select);
   const intl = useIntl();
-  const nodes =
-    select?.nodes.filter((node) => node.type === 'DisInputStep') ?? [];
+  const nodes = select.nodes.filter((node) => node.type === 'DisInputStep');
 
   if (nodes.length === 0) {
     return (

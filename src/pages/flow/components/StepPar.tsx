@@ -89,10 +89,6 @@ export default () => {
 
   const handleValuesChange = useCallback(
     (_: unknown, values: FormValues) => {
-      if (!select) {
-        return;
-      }
-
       const nodeValues = values.nodes ?? {};
       const nextNodes = select.nodes.map((node) => {
         const patch = nodeValues[node.id];
@@ -123,9 +119,8 @@ export default () => {
   );
 
   const columns: ProFormColumnsType[] = useMemo(() => {
-    const from: ProFormColumnsType[] = [];
-    if (select) {
-      from.push({
+    const from: ProFormColumnsType[] = [
+      {
         title: (
           <Flex
             justify="space-between"
@@ -177,62 +172,60 @@ export default () => {
             initialValue: select.description,
           },
         ],
-      });
-      select.nodes
-        .filter((f) => f.selected)
-        .forEach((m) => {
-          const addcolumns: ProFormColumnsType[] = [
-            {
-              title: intl.formatMessage({
-                id: "flow.stepPar.nodeName",
-                defaultMessage: "节点名称",
-              }),
-              dataIndex: ["nodes", m.id, "name"],
-              initialValue: m.data.name,
-            },
-            {
-              title: intl.formatMessage({
-                id: "flow.stepPar.nodeDescription",
-                defaultMessage: "节点描述",
-              }),
-              valueType: "textarea",
-              dataIndex: ["nodes", m.id, "description"],
-              initialValue: m.data.description,
-            },
-          ];
-          from.push({
-            title: (
-              <Flex
-                justify="space-between"
-                style={{ margin: "15px 15px 10px 15px" }}
+      },
+    ];
+    select.nodes
+      .filter((f) => f.selected)
+      .forEach((m) => {
+        const addcolumns: ProFormColumnsType[] = [
+          {
+            title: intl.formatMessage({
+              id: "flow.stepPar.nodeName",
+              defaultMessage: "节点名称",
+            }),
+            dataIndex: ["nodes", m.id, "name"],
+            initialValue: m.data.name,
+          },
+          {
+            title: intl.formatMessage({
+              id: "flow.stepPar.nodeDescription",
+              defaultMessage: "节点描述",
+            }),
+            valueType: "textarea",
+            dataIndex: ["nodes", m.id, "description"],
+            initialValue: m.data.description,
+          },
+        ];
+        from.push({
+          title: (
+            <Flex
+              justify="space-between"
+              style={{ margin: "15px 15px 10px 15px" }}
+            >
+              <Typography.Text strong>
+                {intl.formatMessage(nodeType[m.type as keyof typeof nodeType])}
+              </Typography.Text>
+              <Button
+                danger
+                type="text"
+                size="small"
+                icon={<DeleteOutlined />}
+                onClick={() => handleDeleteNode(m.id)}
               >
-                <Typography.Text strong>
-                  {intl.formatMessage(
-                    nodeType[m.type as keyof typeof nodeType],
-                  )}
-                </Typography.Text>
-                <Button
-                  danger
-                  type="text"
-                  size="small"
-                  icon={<DeleteOutlined />}
-                  onClick={() => handleDeleteNode(m.id)}
-                >
-                  <FormattedMessage
-                    id="flow.stepPar.delete"
-                    defaultMessage="删除"
-                  />
-                </Button>
-              </Flex>
-            ),
-            valueType: "group",
-            columns: [
-              ...addcolumns,
-              ...withNodeDataIndex(m.data.columns ?? [], m),
-            ],
-          });
+                <FormattedMessage
+                  id="flow.stepPar.delete"
+                  defaultMessage="删除"
+                />
+              </Button>
+            </Flex>
+          ),
+          valueType: "group",
+          columns: [
+            ...addcolumns,
+            ...withNodeDataIndex(m.data.columns ?? [], m),
+          ],
         });
-    }
+      });
     return from;
   }, [handleDeleteNode, intl, select]);
 

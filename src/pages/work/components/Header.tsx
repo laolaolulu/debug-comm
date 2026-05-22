@@ -16,7 +16,7 @@ export default () => {
   const setActiveTab = useActiveTabStore((state) => state.setActiveTab);
   const { runningIds, addRunning, removeRunning } = useWorkrunStore();
   const isChange = useWorkflowIsChange();
-  const isRunning = select ? runningIds.includes(select.id) : false;
+  const isRunning = runningIds.includes(select.id);
 
   return (
     <Flex justify="space-between" style={{ margin: 10 }}>
@@ -27,9 +27,7 @@ export default () => {
             icon={<PauseCircleOutlined />}
             type="primary"
             danger
-            disabled={!select}
             onClick={async () => {
-              if (!select) return;
               try {
                 await invoke("stop_workflow", { id: select.id });
                 removeRunning(select.id);
@@ -51,9 +49,7 @@ export default () => {
           <Button
             icon={<PlayCircleOutlined />}
             type="primary"
-            disabled={!select}
             onClick={async () => {
-              if (!select) return;
               try {
                 const workflowId = await invoke<string>("start_workflow", {
                   json: JSON.stringify(select),
