@@ -161,23 +161,61 @@ jobs:
           sed -i '/MainActivity/s/<activity /<activity android:screenOrientation="landscape" /' \
             src-tauri/gen/android/app/src/main/AndroidManifest.xml
 
-      - name: 配置 Android 保留状态栏区域
+      - name: 配置 Android 主题
         run: |
-          THEME=$(sed -n 's/.*android:theme="@style\/\([^"]*\)".*/\1/p' \
-            src-tauri/gen/android/app/src/main/AndroidManifest.xml | head -1)
-          echo "Android 主题名: $THEME"
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
 
-          STYLES="src-tauri/gen/android/app/src/main/res/values/themes.xml"
-          sed -i "s|</style>|    <item name=\"android:statusBarColor\">@android:color/white</item>\n        <item name=\"android:windowLightStatusBar\">true</item>\n    </style>|" "$STYLES"
+          const resDir = 'src-tauri/gen/android/app/src/main/res';
 
-          mkdir -p src-tauri/gen/android/app/src/main/res/values-v35
-          cat > src-tauri/gen/android/app/src/main/res/values-v35/themes.xml << EOF
-          <resources>
-              <style name="$THEME">
-                  <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
-              </style>
-          </resources>
-          EOF
+          // 1. 从 AndroidManifest 提取主题名
+          const manifestPath = path.join(resDir, '..', 'AndroidManifest.xml');
+          const manifest = fs.readFileSync(manifestPath, 'utf8');
+          const themeMatch = manifest.match(/android:theme="@style\/([^"]+)"/);
+          if (!themeMatch) throw new Error('\u65e0\u6cd5\u4ece AndroidManifest.xml \u63d0\u53d6\u4e3b\u9898\u540d');
+          const themeName = themeMatch[1];
+          console.log(`Android \u4e3b\u9898: ${themeName}`);
+
+          // 2. 从 base themes.xml 提取 parent
+          const baseThemesPath = path.join(resDir, 'values', 'themes.xml');
+          const baseThemes = fs.readFileSync(baseThemesPath, 'utf8');
+          const parentMatch = baseThemes.match(new RegExp(
+            `<style\\s+name="${themeName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"[^>]*parent="([^"]+)"`
+          ));
+          const parent = parentMatch ? parentMatch[1] : '';
+          const parentAttr = parent ? ` parent="${parent}"` : '';
+          console.log(`\u7236\u4e3b\u9898: ${parent || '(\u65e0)'}`);
+
+          // 3. \u4fee\u6539 themes.xml \u6dfb\u52a0\u72b6\u6001\u680f\u914d\u7f6e
+          function modifyThemes(filePath) {
+            if (!fs.existsSync(filePath)) return;
+            let text = fs.readFileSync(filePath, 'utf8');
+            if (text.includes('android:statusBarColor')) return;
+            text = text.replace(
+              new RegExp(`(<style\\s+name="${themeName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"[^>]*>)([\\s\\S]*?)(</style>)`),
+              `$1$2\n        <item name="android:statusBarColor">@android:color/white</item>\n        <item name="android:windowLightStatusBar">true</item>\n    $3`
+            );
+            fs.writeFileSync(filePath, text);
+            console.log(`\u4fee\u6539: ${filePath}`);
+          }
+          modifyThemes(baseThemesPath);
+          modifyThemes(path.join(resDir, 'values-night', 'themes.xml'));
+
+          // 4. \u751f\u6210 values-v35/themes.xml (\u4fdd\u7559 parent)
+          const writeV35 = (dirName, extraItems) => {
+            const dir = path.join(resDir, dirName);
+            fs.mkdirSync(dir, { recursive: true });
+            const items = extraItems || '';
+            fs.writeFileSync(path.join(dir, 'themes.xml'),
+              `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <style name="${themeName}"${parentAttr}>\n        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>${items}\n    </style>\n</resources>\n`);
+            console.log(`\u751f\u6210: ${path.join(dir, 'themes.xml')}`);
+          };
+          writeV35('values-v35', '');
+          writeV35('values-night-v35', '');
+
+          console.log('\u4e3b\u9898\u914d\u7f6e\u5b8c\u6210');
+          NODE
 
       - name: 配置 Android 签名
         env:
