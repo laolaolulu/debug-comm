@@ -3,6 +3,8 @@ import {
   CloudDownloadOutlined,
   GlobalOutlined,
 } from "@ant-design/icons";
+import { getVersion } from "@tauri-apps/api/app";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";
 import { App, Button, Dropdown, MenuProps, Space, Typography } from "antd";
@@ -12,6 +14,43 @@ import { langConfigMap } from "../constants";
 import { useIntl } from "react-intl";
 
 const isTauriRuntime = () => "__TAURI_INTERNALS__" in window;
+const isAndroidRuntime = () => /Android/i.test(navigator.userAgent);
+const ANDROID_UPDATE_ENDPOINT =
+  "https://github.com/laolaolulu/debug-comm/releases/latest/download/android-latest.json";
+
+type AndroidUpdateManifest = {
+  version: string;
+  notes?: string;
+  pub_date?: string;
+  platforms?: Record<
+    string,
+    {
+      url?: string;
+      sha256?: string;
+    }
+  >;
+};
+
+const compareVersion = (left: string, right: string) => {
+  const parse = (value: string) =>
+    value
+      .replace(/^v/i, "")
+      .split(/[.-]/)
+      .map((part) => Number.parseInt(part, 10))
+      .map((part) => (Number.isNaN(part) ? 0 : part));
+  const leftParts = parse(left);
+  const rightParts = parse(right);
+  const length = Math.max(leftParts.length, rightParts.length);
+
+  for (let index = 0; index < length; index += 1) {
+    const diff = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
+    if (diff !== 0) {
+      return diff;
+    }
+  }
+
+  return 0;
+};
 
 export default () => {
   const { locale, setLocale } = useLocaleStore();
@@ -47,6 +86,64 @@ export default () => {
       }
 
       try {
+        if (isAndroidRuntime()) {
+          const currentVersion = await getVersion();
+          const response = await fetch(`${ANDROID_UPDATE_ENDPOINT}?t=${Date.now()}`, {
+            cache: "no-store",
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+
+          const manifest = (await response.json()) as AndroidUpdateManifest;
+          const androidPackage = manifest.platforms?.["android-aarch64"];
+          const androidPackageUrl = androidPackage?.url;
+
+          if (
+            !manifest.version ||
+            !androidPackageUrl ||
+            compareVersion(manifest.version, currentVersion) <= 0
+          ) {
+            if (manual) {
+              message.success({
+                key: messageKey,
+                content: formatMessage("update.none", "You are already up to date"),
+                duration: 2,
+              });
+            }
+            return;
+          }
+
+          message.destroy(messageKey);
+          modal.confirm({
+            title: formatMessage("update.availableTitle", "Update available: {version}", {
+              version: manifest.version,
+            }),
+            content: (
+              <Space direction="vertical" size={4}>
+                <Typography.Text>
+                  {formatMessage(
+                    "update.androidAvailableContent",
+                    "Open the APK download page and install this update?",
+                  )}
+                </Typography.Text>
+                {manifest.notes ? (
+                  <Typography.Paragraph style={{ marginBottom: 0, whiteSpace: "pre-wrap" }}>
+                    {manifest.notes}
+                  </Typography.Paragraph>
+                ) : null}
+              </Space>
+            ),
+            okText: formatMessage("update.androidInstall", "Download APK"),
+            cancelText: formatMessage("update.later", "Later"),
+            onOk: async () => {
+              await openUrl(androidPackageUrl);
+            },
+          });
+          return;
+        }
+
         const update = await check({ timeout: 30000 });
 
         if (!update) {

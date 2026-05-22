@@ -391,8 +391,10 @@ jobs:
           script: |
             const fs = require('node:fs');
             const path = require('node:path');
+            const crypto = require('node:crypto');
 
             const releaseId = Number('${{ needs.create-release.outputs.release_id }}');
+            const tag = process.env.GITHUB_REF_NAME;
             const distDir = path.join(
               process.env.GITHUB_WORKSPACE,
               'src-tauri',
@@ -428,8 +430,10 @@ jobs:
               throw new Error(`未在 ${distDir} 下找到 Android APK 产物`);
             }
 
+            const uploaded = [];
+
             for (const file of files) {
-              const name = `debug-comm_${process.env.GITHUB_REF_NAME}_${path.basename(file)}`;
+              const name = `debug-comm_${tag}_${path.basename(file)}`;
               const data = fs.readFileSync(file);
               await github.rest.repos.uploadReleaseAsset({
                 owner: context.repo.owner,
@@ -438,4 +442,33 @@ jobs:
                 name,
                 data,
               });
+              uploaded.push({ name, file, data });
             }
+
+            const primaryApk = uploaded[0];
+            const apkUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/releases/download/${tag}/${encodeURIComponent(primaryApk.name)}`;
+            const manifest = {
+              version: tag.replace(/^v/, ''),
+              pub_date: new Date().toISOString(),
+              notes: `Android ${tag}`,
+              platforms: {
+                'android-aarch64': {
+                  url: apkUrl,
+                  sha256: crypto
+                    .createHash('sha256')
+                    .update(primaryApk.data)
+                    .digest('hex'),
+                },
+              },
+            };
+
+            await github.rest.repos.uploadReleaseAsset({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: releaseId,
+              name: 'android-latest.json',
+              data: Buffer.from(JSON.stringify(manifest, null, 2)),
+              headers: {
+                'content-type': 'application/json',
+              },
+            });

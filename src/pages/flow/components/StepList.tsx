@@ -100,7 +100,7 @@ export default () => {
   );
 
   return (
-    <Flex vertical>
+    <Flex vertical style={{}}>
       <Flex justify="space-between" style={{ margin: "15px 15px 5px 15px" }}>
         <Typography.Text strong>
           <FormattedMessage id="step.list.title" defaultMessage="工作流节点" />
@@ -114,7 +114,17 @@ export default () => {
         </Typography.Text>
       </Flex>
       <Divider size="small" />
-      <Flex gap={10} vertical style={{ margin: "5px 15px 10px 10px" }}>
+      <Flex
+        gap={10}
+        vertical
+        style={{
+          padding: "5px 15px 10px 10px",
+          overflowX: "hidden",
+          overflowY: "auto",
+          height: "calc(100vh - 160px)",
+          scrollbarWidth: "thin",
+        }}
+      >
         {steps.map((step) => (
           <DraggableNode key={step.type} step={step} onDrop={handleNodeDrop} />
         ))}

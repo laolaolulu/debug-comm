@@ -67,9 +67,7 @@ const getFormValues = (workflow: Workflow): FormValues => ({
   id: workflow.id,
   name: workflow.name,
   description: workflow.description,
-  nodes: Object.fromEntries(
-    workflow.nodes.map((node) => [node.id, node.data]),
-  ),
+  nodes: Object.fromEntries(workflow.nodes.map((node) => [node.id, node.data])),
 });
 
 export default () => {
