@@ -240,16 +240,23 @@ jobs:
           }
 
           const resDir = 'src-tauri/gen/android/app/src/main/res';
+          const valuesDir = path.join(resDir, 'values');
+          const valuesV35Dir = path.join(resDir, 'values-v35');
+          fs.mkdirSync(valuesDir, { recursive: true });
+          fs.mkdirSync(valuesV35Dir, { recursive: true });
+
           const valuesDirs = fs
             .readdirSync(resDir, { withFileTypes: true })
             .filter((entry) => entry.isDirectory() && entry.name.startsWith('values'))
             .map((entry) => path.join(resDir, entry.name));
 
           const styleItems = [
-            ['android:windowOptOutEdgeToEdgeEnforcement', 'true'],
             ['android:statusBarColor', '@android:color/white'],
             ['android:navigationBarColor', '@android:color/white'],
             ['android:windowLightStatusBar', 'true'],
+          ];
+          const android35StyleItems = [
+            ['android:windowOptOutEdgeToEdgeEnforcement', 'true'],
           ];
 
           const escapeRegExp = (value) =>
@@ -266,7 +273,41 @@ jobs:
             return style.replace(/<\/style>/, `        ${item}\n    </style>`);
           };
 
-          let patchedStyles = 0;
+          const ensureResourcesFile = (stylesFile) => {
+            if (!fs.existsSync(stylesFile)) {
+              fs.writeFileSync(stylesFile, '<resources>\n</resources>\n');
+            }
+          };
+
+          const ensureStyle = (stylesFile, themeName, items) => {
+            ensureResourcesFile(stylesFile);
+            let styles = fs.readFileSync(stylesFile, 'utf8');
+            const stylePattern = new RegExp(
+              `<style\\b[^>]*name="${escapeRegExp(themeName)}"[^>]*>[\\s\\S]*?<\\/style>`,
+            );
+
+            if (stylePattern.test(styles)) {
+              styles = styles.replace(stylePattern, (style) =>
+                items.reduce(
+                  (current, [itemName, itemValue]) =>
+                    upsertStyleItem(current, itemName, itemValue),
+                  style,
+                ),
+              );
+            } else {
+              const styleBody = items
+                .map(([itemName, itemValue]) => `        <item name="${itemName}">${itemValue}</item>`)
+                .join('\n');
+              const style = [
+                `    <style name="${themeName}" parent="android:style/Theme.Material.Light.NoActionBar">`,
+                styleBody,
+                '    </style>',
+              ].join('\n');
+              styles = styles.replace(/<\/resources>/, `${style}\n</resources>`);
+            }
+
+            fs.writeFileSync(stylesFile, styles);
+          };
 
           for (const dir of valuesDirs) {
             const stylesFile = path.join(dir, 'styles.xml');
@@ -282,7 +323,6 @@ jobs:
                   return style;
                 }
 
-                patchedStyles += 1;
                 return styleItems.reduce(
                   (current, [itemName, itemValue]) =>
                     upsertStyleItem(current, itemName, itemValue),
@@ -296,10 +336,9 @@ jobs:
             }
           }
 
-          if (patchedStyles === 0) {
-            throw new Error(
-              `无法找到 Android 主题样式：${themeNames.join(', ')}`,
-            );
+          for (const themeName of themeNames) {
+            ensureStyle(path.join(valuesDir, 'styles.xml'), themeName, styleItems);
+            ensureStyle(path.join(valuesV35Dir, 'styles.xml'), themeName, android35StyleItems);
           }
           NODE
 
