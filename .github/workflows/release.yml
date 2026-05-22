@@ -79,28 +79,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libudev-dev
 
-      - name: 配置 pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          version: 10.33.2
-          run_install: false
-
-      - name: 配置 Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: lts/*
-          cache: pnpm
-
-      - name: 安装 Rust stable
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Rust 缓存
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: ./src-tauri -> target
-
-      - name: 安装前端依赖
-        run: pnpm install --frozen-lockfile
+      - name: 设置构建环境
+        uses: ./.github/actions/setup-tauri-env
 
       - name: 校验更新签名密钥
         shell: pwsh
@@ -153,23 +133,10 @@ jobs:
       - name: 拉取代码
         uses: actions/checkout@v6
 
-      - name: 配置 pnpm
-        uses: pnpm/action-setup@v6
+      - name: 设置构建环境
+        uses: ./.github/actions/setup-tauri-env
         with:
-          version: 10.33.2
-          run_install: false
-
-      - name: 配置 Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: lts/*
-          cache: pnpm
-
-      - name: 安装 Rust stable
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: 安装 Android Rust 目标
-        run: rustup target add aarch64-linux-android
+          rust-targets: aarch64-linux-android
 
       - name: 配置 Java
         uses: actions/setup-java@v5
@@ -186,170 +153,31 @@ jobs:
           echo "NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> "$GITHUB_ENV"
 
-      - name: Rust 缓存
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: ./src-tauri -> target
-
-      - name: 安装前端依赖
-        run: pnpm install --frozen-lockfile
-
       - name: 初始化 Android 工程
         run: pnpm tauri android init --ci
 
-      - name: 配置 Android 窗口行为
+      - name: 配置 Android 横屏
         run: |
-          node <<'NODE'
-          const fs = require('node:fs');
-          const path = require('node:path');
+          sed -i '/MainActivity/s/<activity /<activity android:screenOrientation="landscape" /' \
+            src-tauri/gen/android/app/src/main/AndroidManifest.xml
 
-          const manifestFile = 'src-tauri/gen/android/app/src/main/AndroidManifest.xml';
-          let manifest = fs.readFileSync(manifestFile, 'utf8');
+      - name: 配置 Android 保留状态栏区域
+        run: |
+          THEME=$(sed -n 's/.*android:theme="@style\/\([^"]*\)".*/\1/p' \
+            src-tauri/gen/android/app/src/main/AndroidManifest.xml | head -1)
+          echo "Android 主题名: $THEME"
 
-          const setAndroidAttribute = (tag, name, value) => {
-            const attribute = `android:${name}`;
-            const pattern = new RegExp(`${attribute}="[^"]*"`);
-            if (pattern.test(tag)) {
-              return tag.replace(pattern, `${attribute}="${value}"`);
-            }
-            return tag.replace(/>$/, `\n            ${attribute}="${value}">`);
-          };
+          STYLES="src-tauri/gen/android/app/src/main/res/values/themes.xml"
+          sed -i "s|</style>|    <item name=\"android:statusBarColor\">@android:color/white</item>\n        <item name=\"android:windowLightStatusBar\">true</item>\n    </style>|" "$STYLES"
 
-          const nextManifest = manifest.replace(
-            /<activity\b(?=[^>]*android:name="[^"]*MainActivity[^"]*")[^>]*>/,
-            (tag) => setAndroidAttribute(tag, 'screenOrientation', 'landscape'),
-          );
-
-          if (nextManifest === manifest) {
-            throw new Error('无法在 AndroidManifest.xml 中找到 Android MainActivity');
-          }
-
-          manifest = nextManifest;
-          fs.writeFileSync(manifestFile, manifest);
-
-          const themeNames = [
-            ...new Set(
-              [...manifest.matchAll(/android:theme="@style\/([^"]+)"/g)].map(
-                (match) => match[1],
-              ),
-            ),
-          ];
-
-          if (themeNames.length === 0) {
-            throw new Error('无法在 AndroidManifest.xml 中找到 Android 主题引用');
-          }
-
-          const resDir = 'src-tauri/gen/android/app/src/main/res';
-          const valuesV35Dir = path.join(resDir, 'values-v35');
-          fs.mkdirSync(valuesV35Dir, { recursive: true });
-
-          const valuesDirs = fs
-            .readdirSync(resDir, { withFileTypes: true })
-            .filter((entry) => entry.isDirectory() && entry.name.startsWith('values'))
-            .map((entry) => path.join(resDir, entry.name));
-
-          const styleItems = [
-            ['android:statusBarColor', '@android:color/white'],
-            ['android:navigationBarColor', '@android:color/white'],
-            ['android:windowLightStatusBar', 'true'],
-          ];
-          const android35StyleItems = [
-            ['android:windowOptOutEdgeToEdgeEnforcement', 'true'],
-          ];
-
-          const escapeRegExp = (value) =>
-            value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-          const upsertStyleItem = (style, name, value) => {
-            const pattern = new RegExp(
-              `<item\\s+name="${escapeRegExp(name)}">[^<]*<\\/item>`,
-            );
-            const item = `<item name="${name}">${value}</item>`;
-            if (pattern.test(style)) {
-              return style.replace(pattern, item);
-            }
-            return style.replace(/<\/style>/, `        ${item}\n    </style>`);
-          };
-
-          const patchStylesInFile = (file, themeName, items) => {
-            if (!fs.existsSync(file)) {
-              return false;
-            }
-
-            const styles = fs.readFileSync(file, 'utf8');
-            const stylePattern = new RegExp(
-              `<style\\b[^>]*name="${escapeRegExp(themeName)}"[^>]*>[\\s\\S]*?<\\/style>`,
-            );
-
-            if (!stylePattern.test(styles)) {
-              return false;
-            }
-
-            const nextStyles = styles.replace(stylePattern, (style) =>
-              items.reduce(
-                (current, [itemName, itemValue]) =>
-                  upsertStyleItem(current, itemName, itemValue),
-                style,
-              ),
-            );
-            fs.writeFileSync(file, nextStyles);
-            return true;
-          };
-
-          const ensureVersionedStyle = (file, themeName, items) => {
-            let styles = fs.existsSync(file)
-              ? fs.readFileSync(file, 'utf8')
-              : '<resources>\n</resources>\n';
-            const stylePattern = new RegExp(
-              `<style\\b[^>]*name="${escapeRegExp(themeName)}"[^>]*>[\\s\\S]*?<\\/style>`,
-            );
-
-            if (stylePattern.test(styles)) {
-              styles = styles.replace(stylePattern, (style) =>
-                items.reduce(
-                  (current, [itemName, itemValue]) =>
-                    upsertStyleItem(current, itemName, itemValue),
-                  style,
-                ),
-              );
-            } else {
-              const styleBody = items
-                .map(([itemName, itemValue]) => `        <item name="${itemName}">${itemValue}</item>`)
-                .join('\n');
-              const style = [
-                `    <style name="${themeName}">`,
-                styleBody,
-                '    </style>',
-              ].join('\n');
-              styles = styles.replace(/<\/resources>/, `${style}\n</resources>`);
-            }
-
-            fs.writeFileSync(file, styles);
-          };
-
-          for (const themeName of themeNames) {
-            let patchedBaseTheme = false;
-            for (const dir of valuesDirs) {
-              for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-                if (entry.isFile() && entry.name.endsWith('.xml')) {
-                  patchedBaseTheme =
-                    patchStylesInFile(path.join(dir, entry.name), themeName, styleItems) ||
-                    patchedBaseTheme;
-                }
-              }
-            }
-
-            if (!patchedBaseTheme) {
-              throw new Error(`无法找到 Android 主题样式：${themeName}`);
-            }
-
-            ensureVersionedStyle(
-              path.join(valuesV35Dir, 'themes.xml'),
-              themeName,
-              android35StyleItems,
-            );
-          }
-          NODE
+          mkdir -p src-tauri/gen/android/app/src/main/res/values-v35
+          cat > src-tauri/gen/android/app/src/main/res/values-v35/themes.xml << EOF
+          <resources>
+              <style name="$THEME">
+                  <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
+              </style>
+          </resources>
+          EOF
 
       - name: 配置 Android 签名
         env:
@@ -427,6 +255,11 @@ jobs:
 
           fs.writeFileSync(file, text);
           NODE
+
+      - name: 配置 Android 更新端点
+        run: |
+          sed -i 's|releases/latest/download/latest\.json|releases/latest/download/android-latest.json|g' \
+            src-tauri/tauri.conf.json
 
       - name: 构建 Android 安装包
         run: pnpm tauri android build --apk --target aarch64 --ci

@@ -1,0 +1,40 @@
+name: 设置 Tauri 构建环境
+description: 安装 pnpm、Node.js、Rust 并安装前端依赖
+
+inputs:
+  rust-targets:
+    description: 额外需要安装的 Rust 编译目标
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: 配置 pnpm
+      uses: pnpm/action-setup@v6
+      with:
+        version: 10.33.2
+        run_install: false
+
+    - name: 配置 Node.js
+      uses: actions/setup-node@v6
+      with:
+        node-version: lts/*
+        cache: pnpm
+
+    - name: 安装 Rust stable
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: 安装额外 Rust 目标
+      if: inputs.rust-targets != ''
+      shell: bash
+      run: rustup target add ${{ inputs.rust-targets }}
+
+    - name: Rust 缓存
+      uses: swatinem/rust-cache@v2
+      with:
+        workspaces: ./src-tauri -> target
+
+    - name: 安装前端依赖
+      shell: bash
+      run: pnpm install --frozen-lockfile
