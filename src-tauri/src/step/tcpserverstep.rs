@@ -56,10 +56,9 @@ pub struct TcpServerStep {
 
 impl TcpServerStep {
     /// 创建并启动 TCP 服务端步骤。
-    pub fn new(node: WorkflowNode, workflow: Arc<Workflow>) -> Result<Arc<Self>, String> {
-        let context = BaseStepContext::new(node, Arc::clone(&workflow));
-        let data = context
-            .node
+    pub fn new(node: &WorkflowNode, workflow: Arc<Workflow>) -> Result<Arc<Self>, String> {
+        let context = BaseStepContext::new(&node.id, &node.r#type, Arc::clone(&workflow));
+        let data = node
             .data
             .parse::<TcpServerStepData>()
             .map_err(|err| format!("tcpserverstep[{}] invalid data: {err}", context.id()))?;

@@ -329,7 +329,7 @@ TCP 服务端步骤。
 3. 定义步骤结构体，组合 `BaseStepContext`。
 4. 实现 `new(node, workflow)`：
    - 创建 `BaseStepContext`。
-   - 调用 `context.node.data.parse::<XxxStepData>()` 解析参数。
+   - 调用 `node.data.parse::<XxxStepData>()` 解析参数。
    - 初始化连接、设备、缓存等资源。
    - 按需订阅消息、启动后台任务。
 5. 实现 `BaseStep`。

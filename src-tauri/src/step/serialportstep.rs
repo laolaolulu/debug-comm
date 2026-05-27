@@ -69,10 +69,9 @@ pub struct SerialPortStep {
 
 impl SerialPortStep {
     /// 创建并启动串口步骤。
-    pub fn new(node: WorkflowNode, workflow: Arc<Workflow>) -> Result<Arc<Self>, String> {
-        let context = BaseStepContext::new(node, Arc::clone(&workflow));
-        let data = context
-            .node
+    pub fn new(node: &WorkflowNode, workflow: Arc<Workflow>) -> Result<Arc<Self>, String> {
+        let context = BaseStepContext::new(&node.id, &node.r#type, Arc::clone(&workflow));
+        let data = node
             .data
             .parse::<SerialPortStepData>()
             .map_err(|err| format!("serialportstep[{}] invalid data: {err}", context.id()))?;

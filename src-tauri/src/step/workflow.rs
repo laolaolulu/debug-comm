@@ -29,7 +29,8 @@ fn workflow_instances() -> &'static WorkflowRegistry {
 
 pub struct Workflow {
     /// 工作流定义数据，直接保存前端传入的工作流 JSON 结构。
-    pub definition: WorkflowDefinition,
+    definition: Arc<WorkflowDefinition>,
+    edges: Arc<[WorkflowEdge]>,
     /// 工作流内部消息广播通道发送端。
     /// 每个工作流实例拥有自己的广播通道，步骤之间可以围绕该工作流收发消息。
     tx: broadcast::Sender<StepMsg<Value>>,
@@ -61,8 +62,10 @@ impl Workflow {
         // 这里统一使用 StepMsg<Value>，这样消息体既保留结构化 JSON，
         // 又能兼容不同步骤发送的不同类型数据。
         let (tx, _) = broadcast::channel::<StepMsg<Value>>(64);
+        let edges = Arc::<[WorkflowEdge]>::from(definition.edges.clone());
         Arc::new(Self {
-            definition,
+            definition: Arc::new(definition),
+            edges,
             tx,
             steps: RwLock::new(HashMap::new()),
             app: None,
@@ -73,8 +76,10 @@ impl Workflow {
     /// 接收窗口步骤会用这个句柄把收到的数据 emit 给前端。
     pub fn new_with_app(definition: WorkflowDefinition, app: AppHandle) -> Arc<Self> {
         let (tx, _) = broadcast::channel::<StepMsg<Value>>(64);
+        let edges = Arc::<[WorkflowEdge]>::from(definition.edges.clone());
         Arc::new(Self {
-            definition,
+            definition: Arc::new(definition),
+            edges,
             tx,
             steps: RwLock::new(HashMap::new()),
             app: Some(app),
@@ -94,10 +99,11 @@ impl Workflow {
     /// 运行工作流。
     /// 会按照 edges 的上下游顺序实例化节点，并按节点类型创建对应步骤对象。
     pub fn run(self: &Arc<Self>) -> Result<(), String> {
-        let sorted_nodes = self.sort_nodes();
+        let sorted_nodes = self.sort_node_indices();
         let mut steps = HashMap::<String, Arc<dyn BaseStep>>::new();
 
-        for node in sorted_nodes {
+        for node_index in sorted_nodes {
+            let node = &self.definition.nodes[node_index];
             let step = self.instantiate_step(node)?;
             steps.insert(step.id().to_string(), step);
         }
@@ -136,7 +142,7 @@ impl Workflow {
     ) -> WorkflowSubscription {
         let current_step_id = step_id.into();
         let mut rx = self.subscribe();
-        let edges = self.definition.edges.clone();
+        let edges = Arc::clone(&self.edges);
         let (filtered_tx, filtered_rx) = mpsc::unbounded_channel::<StepMsg<Value>>();
 
         let task = async_runtime::spawn(async move {
@@ -179,7 +185,7 @@ impl Workflow {
     pub fn subscribe_step_related(&self, step_id: impl Into<String>) -> WorkflowSubscription {
         let current_step_id = step_id.into();
         let mut rx = self.subscribe();
-        let edges = self.definition.edges.clone();
+        let edges = Arc::clone(&self.edges);
         let (filtered_tx, filtered_rx) = mpsc::unbounded_channel::<StepMsg<Value>>();
 
         let task = async_runtime::spawn(async move {
@@ -227,7 +233,7 @@ impl Workflow {
 
     /// 将当前工作流重新序列化为 JSON 字符串。
     pub fn to_json(&self) -> serde_json::Result<String> {
-        serde_json::to_string(&self.definition)
+        serde_json::to_string(self.definition.as_ref())
     }
 
     /// 按 id 从全局实例集合中查找工作流。
@@ -271,7 +277,10 @@ impl Workflow {
     }
 
     /// 按节点类型实例化对应的步骤对象。
-    fn instantiate_step(self: &Arc<Self>, node: WorkflowNode) -> Result<Arc<dyn BaseStep>, String> {
+    fn instantiate_step(
+        self: &Arc<Self>,
+        node: &WorkflowNode,
+    ) -> Result<Arc<dyn BaseStep>, String> {
         match node.r#type.to_lowercase().as_str() {
             "disinputstep" => {
                 let step: Arc<dyn BaseStep> = DisInputStep::new(node, Arc::clone(self))?;
@@ -307,13 +316,13 @@ impl Workflow {
 
     /// 按 edges 拓扑顺序排列节点。
     /// 上游节点会优先于下游节点被实例化。
-    fn sort_nodes(&self) -> Vec<WorkflowNode> {
+    fn sort_node_indices(&self) -> Vec<usize> {
         let mut nodes_by_id = self
             .definition
             .nodes
             .iter()
-            .cloned()
-            .map(|node| (node.id.clone(), node))
+            .enumerate()
+            .map(|(index, node)| (node.id.clone(), index))
             .collect::<HashMap<_, _>>();
         let mut indegree = nodes_by_id
             .keys()
@@ -322,7 +331,7 @@ impl Workflow {
             .collect::<HashMap<_, _>>();
         let mut graph = HashMap::<String, Vec<String>>::new();
 
-        for edge in &self.definition.edges {
+        for edge in self.edges.iter() {
             if nodes_by_id.contains_key(&edge.source) && nodes_by_id.contains_key(&edge.target) {
                 graph
                     .entry(edge.source.clone())
@@ -345,8 +354,8 @@ impl Workflow {
         let mut sorted = Vec::with_capacity(nodes_by_id.len());
 
         while let Some(node_id) = queue.pop_front() {
-            if let Some(node) = nodes_by_id.remove(&node_id) {
-                sorted.push(node);
+            if let Some(node_index) = nodes_by_id.remove(&node_id) {
+                sorted.push(node_index);
             }
 
             if let Some(targets) = graph.get(&node_id) {
@@ -452,6 +461,22 @@ mod tests {
         }
     }
 
+    fn input_node(id: &str) -> WorkflowNode {
+        WorkflowNode {
+            id: id.to_string(),
+            r#type: "DisInputStep".to_string(),
+            position: crate::step::model::WorkflowNodePosition { x: 0.0, y: 0.0 },
+            data: crate::step::model::WorkflowNodeData {
+                name: "input".to_string(),
+                description: String::new(),
+                columns: Vec::new(),
+                extra: HashMap::new(),
+            },
+            selected: false,
+            extra: HashMap::new(),
+        }
+    }
+
     #[test]
     fn adjacency_matches_either_edge_direction() {
         let edges = vec![edge("tcp", "output"), edge("reverse-output", "serial")];
@@ -476,5 +501,23 @@ mod tests {
             &MsgType::Up
         ));
         assert!(Workflow::match_step_adjacency(&edges, "output", "tcp"));
+    }
+
+    #[test]
+    fn run_keeps_workflow_definition_json_unchanged() {
+        let definition = WorkflowDefinition {
+            id: "readonly-definition".to_string(),
+            name: "readonly definition".to_string(),
+            description: Some("definition remains a startup snapshot".to_string()),
+            nodes: vec![input_node("input")],
+            edges: Vec::new(),
+        };
+        let expected = serde_json::to_value(&definition).unwrap();
+        let workflow = Workflow::new(definition);
+
+        workflow.run().unwrap();
+
+        let actual: Value = serde_json::from_str(&workflow.to_json().unwrap()).unwrap();
+        assert_eq!(actual, expected);
     }
 }

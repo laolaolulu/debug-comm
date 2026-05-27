@@ -1,4 +1,4 @@
-use crate::step::model::{StepManifest, WorkflowNode};
+use crate::step::model::StepManifest;
 use crate::step::workflow::Workflow;
 use std::sync::{Arc, Weak};
 
@@ -7,28 +7,34 @@ use std::sync::{Arc, Weak};
 #[derive(Debug, Clone)]
 pub struct BaseStepContext {
     /// 当前步骤对应的工作流节点。
-    pub node: WorkflowNode,
+    id: String,
+    node_type: String,
     /// 当前节点所属工作流实例。
     pub workflow: Weak<Workflow>,
 }
 
 impl BaseStepContext {
     /// 创建步骤基础上下文。
-    pub fn new(node: WorkflowNode, workflow: Arc<Workflow>) -> Self {
+    pub fn new(
+        id: impl Into<String>,
+        node_type: impl Into<String>,
+        workflow: Arc<Workflow>,
+    ) -> Self {
         Self {
-            node,
+            id: id.into(),
+            node_type: node_type.into(),
             workflow: Arc::downgrade(&workflow),
         }
     }
 
     /// 获取当前步骤 id。
     pub fn id(&self) -> &str {
-        &self.node.id
+        &self.id
     }
 
     /// 获取当前步骤类型。
     pub fn node_type(&self) -> &str {
-        &self.node.r#type
+        &self.node_type
     }
 
     /// 获取当前所属工作流实例。

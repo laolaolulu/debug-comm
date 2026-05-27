@@ -29,13 +29,11 @@ pub struct DisInputStep {
 
 impl DisInputStep {
     /// 创建发送数据窗口步骤。
-    pub fn new(node: WorkflowNode, workflow: Arc<Workflow>) -> Result<Arc<Self>, String> {
-        let context = BaseStepContext::new(node, workflow);
+    pub fn new(node: &WorkflowNode, workflow: Arc<Workflow>) -> Result<Arc<Self>, String> {
+        let context = BaseStepContext::new(&node.id, &node.r#type, workflow);
 
         // 这里解析一次 data，主要用于尽早发现前端传入结构不符合约定的问题。
-        context
-            .node
-            .data
+        node.data
             .parse::<DisInputStepData>()
             .map_err(|err| format!("disinputstep[{}] invalid data: {err}", context.id()))?;
 

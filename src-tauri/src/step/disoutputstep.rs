@@ -46,16 +46,16 @@ pub struct DisOutputStep {
 impl DisOutputStep {
     /// 创建并启动接收数据窗口步骤。
     pub fn new(
-        node: WorkflowNode,
+        node: &WorkflowNode,
         workflow: Arc<Workflow>,
         app: Option<AppHandle>,
     ) -> Result<Arc<Self>, String> {
         // 基于节点和工作流创建基础上下文。
-        let context: BaseStepContext = BaseStepContext::new(node, Arc::clone(&workflow));
+        let context: BaseStepContext =
+            BaseStepContext::new(&node.id, &node.r#type, Arc::clone(&workflow));
 
         // 仍然解析 data，是为了尽早发现接收窗口节点配置结构不合法。
-        let _data = context
-            .node
+        let _data = node
             .data
             .parse::<DisOutputStepData>()
             .map_err(|err| format!("disoutputstep[{}] invalid data: {err}", context.id()))?;
