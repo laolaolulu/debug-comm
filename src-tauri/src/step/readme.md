@@ -1,12 +1,12 @@
 # 工作流设计说明
 
-`src-tauri/src/step` 目录负责后端工作流运行逻辑。前端工作流设计器传入 JSON 后，后端将 JSON 解析成 `WorkflowDefinition`，创建 `Workflow` 实例，再根据节点类型实例化具体步骤。步骤之间不直接互相调用，而是通过 `Workflow` 内部的消息通道发布和订阅数据。
+`src-tauri/src/step` 目录负责后端工作流运行逻辑。前端工作流设计器传入 JSON 后，后端将 JSON 解析成 `WorkflowDefinition`，创建 `Workflow` 实例，再根据节点类型实例化具体步骤。步骤之间不直接持有彼此，而是通过 `Workflow::publish` 按连线方向分发消息。
 
 当前工作流的核心设计可以概括为：
 
 - `WorkflowDefinition` 保存工作流静态结构：节点、连线、名称、描述。
-- `Workflow` 保存工作流运行实例：消息通道、步骤实例集合、全局注册关系。
-- `BaseStep` 是所有步骤的统一抽象，每个具体步骤负责自己的资源初始化、消息订阅、数据处理和后台任务。
+- `Workflow` 保存工作流运行实例：步骤实例集合、连线关系、全局注册关系。
+- `BaseStep` 是所有步骤的统一抽象，每个具体步骤负责自己的资源初始化、消息处理和后台任务。
 - `MsgType::Down` 表示数据沿 `edge.source -> edge.target` 向下游流动。
 - `MsgType::Up` 表示数据从下游节点返回上游节点。
 
@@ -26,7 +26,6 @@
 2. `start_workflow` 将 JSON 反序列化为 `WorkflowDefinition`。
 3. `Workflow::new` 创建工作流实例：
    - 保存前端传入的工作流定义。
-   - 创建当前工作流专属的 `broadcast::Sender<StepMsg<Value>>`。
    - 将实例注册到全局 `WORKFLOW_INSTANCES` 中，方便查询正在执行的任务，也方便停止任务时释放实例。
 4. 调用 `Workflow::run` 后开始装配步骤：
    - `sort_nodes` 根据 `edges` 做拓扑排序，上游节点优先实例化。
@@ -35,18 +34,15 @@
    - 未实现或未知类型会直接返回错误，避免工作流带着无行为节点继续运行。
    - 创建完成后的步骤实例保存到 `Workflow.steps`，由工作流持有生命周期。
 5. 具体步骤在构造函数中启动自己的运行逻辑：
-   - 例如 `SerialPortStep` 会打开串口，并启动写串口任务和读串口任务。
-   - 写任务通过 `subscribe_step(step_id, MsgType::Down)` 订阅上游节点发来的下行消息。
-   - 读任务从串口读到数据后，通过 `publish(step_id, MsgType::Up, payload)` 向上游节点发布返回消息。
-6. `Workflow::publish` 将任意可序列化数据转成 `serde_json::Value`，包装成 `StepMsg<Value>` 后广播。
-7. `Workflow::subscribe_step` 会为每个订阅启动一个后台筛选任务：
-   - 先判断消息 `action` 是否匹配订阅方向。
-   - 再根据 `edges` 判断消息来源节点和当前节点是否存在正确的上下游关系。
-   - 匹配成功后，将消息转发到该订阅自己的 `mpsc::UnboundedReceiver`。
-8. 工作流或步骤释放时：
+   - 例如 `SerialPortStep` 会打开串口，并启动读串口任务。
+   - 上级节点发来下行消息时，`Workflow` 调用下级步骤的 `read_up`。
+   - 串口读任务从设备读到数据后，通过 `write_up` 向上级节点发布返回消息。
+6. `Workflow::publish` 将任意可序列化数据转成 `serde_json::Value`，包装成 `StepMsg<Value>` 后按 `edges` 分发：
+   - `Down` 分发给下级步骤并触发 `read_up`。
+   - `Up` 分发给上级步骤并触发 `read_down`。
+7. 工作流或步骤释放时：
    - `Workflow::drop` 会从全局注册表移除当前工作流。
    - 各步骤的 `Drop` 会关闭运行标记并中止后台任务。
-   - `WorkflowSubscription::drop` 会中止订阅筛选任务。
 
 ## 节点关系与消息方向
 
@@ -59,8 +55,8 @@ edge.source -> edge.target
 
 `MsgType` 定义两种消息方向：
 
-- `MsgType::Down`：下行消息，从上游节点发送到下游节点。订阅时要求 `edge.source == message_step_id` 且 `edge.target == current_step_id`。
-- `MsgType::Up`：上行消息，从下游节点返回上游节点。订阅时要求 `edge.source == current_step_id` 且 `edge.target == message_step_id`。
+- `MsgType::Down`：下行消息，从上游节点发送到下游节点，触发下游步骤 `read_up`。
+- `MsgType::Up`：上行消息，从下游节点返回上游节点，触发上游步骤 `read_down`。
 
 示例：
 
@@ -68,9 +64,9 @@ edge.source -> edge.target
 disinputstep -> serialportstep -> disoutputstep
 ```
 
-- `serialportstep` 订阅 `Down`，会接收 `disinputstep` 发布的下行消息。
-- `serialportstep` 读到串口数据后发布 `Up`，会被它的上游节点订阅到。
-- 如果希望 `disoutputstep` 显示串口返回数据，需要让显示窗口订阅合适方向的消息，或调整链路设计让串口返回数据按约定继续转发到显示节点。
+- `disinputstep` 发布 `Down` 后，`serialportstep.read_up` 会收到消息并写入串口。
+- `serialportstep` 读到串口数据后调用 `write_up`，上游节点的 `read_down` 会收到返回消息。
+- 如果希望 `disoutputstep` 显示串口返回数据，应让接收窗口作为通信节点的上级。
 
 ## 数据模型设计
 
@@ -121,13 +117,12 @@ disinputstep -> serialportstep -> disoutputstep
 - 创建和保存工作流定义。
 - 管理工作流实例注册表。
 - 按工作流节点和连线实例化步骤。
-- 提供步骤间消息发布和订阅能力。
+- 提供步骤间消息发布和按连线分发能力。
 - 维护步骤实例生命周期。
 
 主要成员：
 
 - `definition`：前端传入的工作流定义。
-- `tx`：当前工作流内部的广播消息发送端。
 - `steps`：当前运行中的步骤实例集合。
 - `WORKFLOW_INSTANCES`：全局工作流注册表，按工作流 id 保存 `Arc<Workflow>`。
 
@@ -137,17 +132,13 @@ disinputstep -> serialportstep -> disoutputstep
 - `from_json`：从 JSON 字符串创建工作流。
 - `run`：排序并实例化所有节点。
 - `publish`：发布步骤消息。
-- `subscribe`：订阅工作流全部广播消息。
-- `subscribe_step`：订阅和当前步骤有上下游关系的指定方向消息。
 - `get`、`list`、`list_ids`、`remove`：全局工作流实例管理。
 - `sort_nodes`：根据连线做拓扑排序。
-- `match_step_relation`：根据 `edges` 判断消息来源是否符合订阅关系。
 
 设计细节：
 
-- `broadcast` 用于工作流级别广播，所有订阅都可以拿到同一份消息流。
-- `subscribe_step` 再用 `mpsc` 输出过滤后的消息，具体步骤只消费与自己有关的消息。
-- 拓扑排序只影响步骤实例化顺序，不代表消息会自动沿链路传递。消息是否继续传递由具体步骤的业务逻辑决定。
+- `publish` 根据 `MsgType` 和 `edges` 找到目标步骤并直接调用 `read_up` 或 `read_down`。
+- 拓扑排序只影响步骤实例化顺序，不代表设备数据会自动产生。消息是否继续传递由具体步骤的业务逻辑决定。
 - 如果图中存在环或异常节点，`sort_nodes` 会按原始节点顺序补齐剩余节点，避免节点丢失。
 
 ### `basestep.rs`
@@ -156,14 +147,15 @@ disinputstep -> serialportstep -> disoutputstep
 
 核心结构和 trait：
 
-- `BaseStepContext`：步骤基础上下文，保存当前节点定义和所属工作流的弱引用。
-- `BaseStep`：所有步骤都要实现的公共 trait，提供 `context`、`id`、`node_type` 等基础能力。
+- `BaseStepContext`：步骤基础上下文，保存当前节点 id 和所属工作流的弱引用。
+- `BaseStep`：所有步骤都要实现的公共 trait，提供 `read_up` 和 `read_down` 消息回调。
 - `StepManifestProvider`：步骤元数据提供者，用于导出前端可创建的步骤类型和默认配置。
 
 设计要点：
 
 - 具体步骤通过组合 `BaseStepContext` 复用基础字段。
 - `BaseStepContext` 持有 `Weak<Workflow>`，避免步骤和工作流之间形成强引用循环。
+- `write_down` 用于向下级发布消息，`write_up` 用于向上级发布消息。
 - 具体步骤应在 `Drop` 中释放自己创建的后台任务、连接、文件句柄或设备资源。
 
 ### `model.rs`
@@ -202,11 +194,11 @@ step 模块入口文件，声明并导出当前目录下的各个子模块：
 当前已实现能力：
 
 - 打开指定串口。
-- 订阅上游节点下发的数据。
+- 通过 `read_up` 读取上游节点下发的数据。
 - 将接收到的数据写入串口。
 - 阻塞读取串口返回数据。
 - 将串口返回数据发布为上行消息。
-- 步骤销毁时中止读写任务。
+- 步骤销毁时中止读任务。
 
 当前代码中的节点参数：
 
@@ -226,14 +218,11 @@ step 模块入口文件，声明并导出当前目录下的各个子模块：
 1. `SerialPortStep::new` 解析节点 data 为 `SerialPortStepData`。
 2. 使用 `serialport::new(port_name, baud_rate)` 打开串口。
 3. clone 串口句柄，分别用于读和写。
-4. 启动写任务：
-   - 订阅 `MsgType::Down`。
-   - 将 `StepMsg.msg` 转换为 `Vec<u8>`。
-   - 写入串口并 `flush`。
+4. `read_up` 收到下行消息时，将 `StepMsg.msg` 转换为 `Vec<u8>`，写入串口并 `flush`。
 5. 启动读任务：
    - 使用 `spawn_blocking` 执行阻塞串口读取。
-   - 读到字节后发布 `MsgType::Up`，消息体为 `byte[]`。
-6. `Drop` 时设置 `running = false`，并 abort 读写任务。
+   - 读到字节后调用 `write_up`，消息体为 `byte[]`。
+6. `Drop` 时设置 `running = false`，并 abort 读任务。
 
 ### `tcpclientstep.rs`
 
@@ -242,8 +231,8 @@ TCP 客户端步骤。
 当前已实现能力：
 
 - 作为 TCP client 主动连接远端服务。
-- 订阅上游 `MsgType::Down` 消息，将消息体转成字节后写入 TCP 连接。
-- 从 TCP 连接读取返回数据后发布 `MsgType::Up`。
+- 通过 `read_up` 读取上游下行消息，将消息体转成字节后写入 TCP 连接。
+- 从 TCP 连接读取返回数据后调用 `write_up`。
 - 支持连接超时、最大读取字节数和结束符拆包。
 
 当前节点参数：
@@ -259,9 +248,9 @@ TCP 客户端步骤。
 建议执行逻辑：
 
 1. 创建步骤时解析参数并建立 TCP 连接。
-2. 启动写任务，订阅 `MsgType::Down`，收到消息后写入 socket。
+2. `read_up` 收到下行消息后写入 socket。
 3. 启动读任务，读取 socket 数据，按结束符或读取长度拆包。
-4. 读到完整数据后发布 `MsgType::Up`。
+4. 读到完整数据后调用 `write_up`。
 5. 连接异常时当前任务会退出，后续可继续扩展自动重连。
 6. `Drop` 时停止后台任务并关闭连接。
 
@@ -274,7 +263,7 @@ TCP 服务端步骤。
 - 在本地监听指定地址和端口。
 - 接收一个或多个客户端连接。
 - 将客户端上行数据发布到工作流。
-- 订阅工作流下行消息，并广播写回所有客户端。
+- 通过 `read_up` 读取工作流下行消息，并广播写回所有客户端。
 - 支持最大读取字节数和结束符拆包。
 
 当前节点参数：
@@ -290,8 +279,8 @@ TCP 服务端步骤。
 
 1. 创建步骤时绑定本地地址并开始监听。
 2. 启动 accept 任务，接收客户端连接并登记连接状态。
-3. 为每个连接启动读任务，读到客户端数据后发布 `MsgType::Up`。
-4. 启动写任务，订阅 `MsgType::Down`，广播写回所有客户端。
+3. 为每个连接启动读任务，读到客户端数据后调用 `write_up`。
+4. `read_up` 收到下行消息后广播写回所有客户端。
 5. 客户端断开时清理连接状态。
 6. `Drop` 时停止监听、关闭连接并中止后台任务。
 
@@ -305,8 +294,7 @@ TCP 服务端步骤。
 当前已实现内容：
 
 - 创建时解析节点 data。
-- 只作为接收窗口节点占位和 manifest 提供者。
-- 消息监听由外部按 step id 完成。
+- 实现 `read_down`，接收下级返回消息并通过 Tauri 事件推送给前端。
 
 ### `disinputstep.rs`
 
@@ -329,8 +317,8 @@ TCP 服务端步骤。
    - 创建 `BaseStepContext`。
    - 调用 `node.data.parse::<XxxStepData>()` 解析参数。
    - 初始化连接、设备、缓存等资源。
-   - 按需订阅消息、启动后台任务。
-5. 实现 `BaseStep`。
+   - 按需启动设备或网络读取任务。
+5. 实现 `BaseStep`，按方向重写 `read_up` 或 `read_down`。
 6. 实现 `StepManifestProvider`，返回步骤类型、名称、说明和默认 data。
 7. 在 `mod.rs` 中导出模块。
 8. 在 `Workflow::available_steps` 中加入 manifest。

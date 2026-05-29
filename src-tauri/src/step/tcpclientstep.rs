@@ -1,14 +1,17 @@
 use crate::step::basestep::{BaseStep, BaseStepContext, StepManifestProvider};
 use crate::step::model::{
-    find_bytes, parse_hex_end_flag, value_to_bytes, StepManifest, WorkflowNode,
+    find_bytes, parse_hex_end_flag, value_to_bytes, StepManifest, StepMsg, WorkflowNode,
 };
 use crate::step::workflow::Workflow;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::async_runtime::{self, JoinHandle};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::tcp::OwnedWriteHalf;
 use tokio::net::TcpStream;
+use tokio::sync::Mutex as AsyncMutex;
 
 /// TCP 客户端步骤节点 data。
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,18 +34,19 @@ pub struct TcpClientStepData {
 ///
 /// 运行模型：
 /// - 建立一个到远端的 TCP 连接。
-/// - 订阅上游 Down 消息并写入 socket。
-/// - 从 socket 读取数据并发布 Up 消息。
+/// - 上级消息到达时写入 socket。
+/// - 从 socket 读取数据并向上级发布消息。
 pub struct TcpClientStep {
     context: BaseStepContext,
     running: Arc<AtomicBool>,
+    writer: Arc<AsyncMutex<Option<OwnedWriteHalf>>>,
     task: Mutex<Option<JoinHandle<()>>>,
 }
 
 impl TcpClientStep {
     /// 创建并启动 TCP 客户端步骤。
     pub fn new(node: &WorkflowNode, workflow: Arc<Workflow>) -> Result<Arc<Self>, String> {
-        let context = BaseStepContext::new(&node.id, &node.r#type, Arc::clone(&workflow));
+        let context = BaseStepContext::new(&node.id, Arc::clone(&workflow));
         let data = node
             .data
             .parse::<TcpClientStepData>()
@@ -53,62 +57,44 @@ impl TcpClientStep {
         let step = Arc::new(Self {
             context,
             running: Arc::new(AtomicBool::new(true)),
+            writer: Arc::new(AsyncMutex::new(None)),
             task: Mutex::new(None),
         });
 
         let address = format!("{}:{}", data.host, data.port);
         let running = Arc::clone(&step.running);
         let context_for_task = step.context.clone();
-        let mut subscription = step.context.read()?;
-
+        let writer_for_task = Arc::clone(&step.writer);
         let task = async_runtime::spawn(async move {
-            let Ok(mut stream) = TcpStream::connect(&address).await else {
+            let Ok(stream) = TcpStream::connect(&address).await else {
                 return;
             };
+            let (mut reader, writer) = stream.into_split();
+            *writer_for_task.lock().await = Some(writer);
 
             let mut read_buffer = vec![0_u8; 1024];
             let mut packet_buffer = Vec::<u8>::new();
 
             while running.load(Ordering::Relaxed) {
-                tokio::select! {
-                    inbound = subscription.rx.recv() => {
-                        let Some(step_msg) = inbound else {
-                            break;
-                        };
-                        let payload = match value_to_bytes(&step_msg.msg) {
-                            Ok(payload) => payload,
-                            Err(err) => {
-                                eprintln!("tcpclientstep ignored invalid message: {err}");
-                                continue;
-                            }
-                        };
-                        if payload.is_empty() {
-                            continue;
-                        }
-                        if stream.write_all(&payload).await.is_err() {
+                match reader.read(&mut read_buffer).await {
+                    Ok(0) => break,
+                    Ok(size) => {
+                        if Self::publish_received(
+                            &context_for_task,
+                            &mut packet_buffer,
+                            end_flag.as_deref(),
+                            &read_buffer[..size],
+                        )
+                        .is_err()
+                        {
                             break;
                         }
-                        let _ = stream.flush().await;
                     }
-                    read_result = stream.read(&mut read_buffer) => {
-                        match read_result {
-                            Ok(0) => break,
-                            Ok(size) => {
-                                let received = &read_buffer[..size];
-                                if Self::publish_received(
-                                    &context_for_task,
-                                    &mut packet_buffer,
-                                    end_flag.as_deref(),
-                                    received,
-                                ).is_err() {
-                                    break;
-                                }
-                            }
-                            Err(_) => break,
-                        }
-                    }
+                    Err(_) => break,
                 }
             }
+
+            *writer_for_task.lock().await = None;
         });
 
         if let Ok(mut current_task) = step.task.lock() {
@@ -131,18 +117,38 @@ impl TcpClientStep {
                 let packet_end = index + flag.len();
                 let payload = packet_buffer[..packet_end].to_vec();
                 packet_buffer.drain(..packet_end);
-                context.write(payload)?;
+                context.write_up(payload)?;
             }
         } else {
-            context.write(received.to_vec())?;
+            context.write_up(received.to_vec())?;
         }
         Ok(())
     }
 }
 
 impl BaseStep for TcpClientStep {
-    fn context(&self) -> &BaseStepContext {
-        &self.context
+    fn read_up(&self, step_msg: StepMsg<Value>) {
+        let payload = match value_to_bytes(&step_msg.msg) {
+            Ok(payload) => payload,
+            Err(err) => {
+                eprintln!("tcpclientstep ignored invalid message: {err}");
+                return;
+            }
+        };
+        if payload.is_empty() {
+            return;
+        }
+
+        let writer = Arc::clone(&self.writer);
+        async_runtime::spawn(async move {
+            let mut current_writer = writer.lock().await;
+            let Some(writer) = current_writer.as_mut() else {
+                return;
+            };
+            if writer.write_all(&payload).await.is_ok() {
+                let _ = writer.flush().await;
+            }
+        });
     }
 }
 
@@ -151,7 +157,7 @@ impl StepManifestProvider for TcpClientStep {
         StepManifest {
             r#type: "TcpClientStep".to_string(),
             name: "TCP 客户端".to_string(),
-            description: "主动连接远端 TCP 服务，订阅上级消息并写入连接，读取返回数据后向上级发布"
+            description: "主动连接远端 TCP 服务，读取上级消息并写入连接，读取返回数据后向上级发布"
                 .to_string(),
             default_data: serde_json::json!([
                 {

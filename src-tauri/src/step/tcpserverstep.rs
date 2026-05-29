@@ -1,9 +1,10 @@
 use crate::step::basestep::{BaseStep, BaseStepContext, StepManifestProvider};
 use crate::step::model::{
-    find_bytes, parse_hex_end_flag, value_to_bytes, StepManifest, WorkflowNode,
+    find_bytes, parse_hex_end_flag, value_to_bytes, StepManifest, StepMsg, WorkflowNode,
 };
 use crate::step::workflow::Workflow;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::net::TcpListener as StdTcpListener;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -44,20 +45,20 @@ type ClientTasks = Arc<Mutex<Vec<JoinHandle<()>>>>;
 ///
 /// 运行模型：
 /// - 监听本地端口并接收客户端连接。
-/// - 每个客户端有独立读任务，读到数据后发布 Up 消息。
-/// - 一个工作流写任务订阅 Down 消息，并广播写给所有已连接客户端。
+/// - 每个客户端有独立读任务，读到数据后向上级发布消息。
+/// - 上级消息到达时广播写给所有已连接客户端。
 pub struct TcpServerStep {
     context: BaseStepContext,
     running: Arc<AtomicBool>,
+    clients: ClientWriters,
     accept_task: Mutex<Option<JoinHandle<()>>>,
-    write_task: Mutex<Option<JoinHandle<()>>>,
     client_tasks: ClientTasks,
 }
 
 impl TcpServerStep {
     /// 创建并启动 TCP 服务端步骤。
     pub fn new(node: &WorkflowNode, workflow: Arc<Workflow>) -> Result<Arc<Self>, String> {
-        let context = BaseStepContext::new(&node.id, &node.r#type, Arc::clone(&workflow));
+        let context = BaseStepContext::new(&node.id, Arc::clone(&workflow));
         let data = node
             .data
             .parse::<TcpServerStepData>()
@@ -67,23 +68,23 @@ impl TcpServerStep {
 
         // 使用 std listener 先做同步 bind，可以让 new 直接把端口占用等错误返回给调用方。
         let address = format!("{}:{}", data.bind_addr, data.port);
-        let std_listener = StdTcpListener::bind(&address)
-            .map_err(|err| format!("bind {address} failed: {err}"))?;
+        let std_listener =
+            StdTcpListener::bind(&address).map_err(|err| format!("bind {address} failed: {err}"))?;
         std_listener
             .set_nonblocking(true)
             .map_err(|err| format!("set {address} nonblocking failed: {err}"))?;
         let listener = TcpListener::from_std(std_listener)
             .map_err(|err| format!("create tokio listener {address} failed: {err}"))?;
 
+        let clients: ClientWriters = Arc::new(Mutex::new(HashMap::new()));
         let step = Arc::new(Self {
             context,
             running: Arc::new(AtomicBool::new(true)),
+            clients: Arc::clone(&clients),
             accept_task: Mutex::new(None),
-            write_task: Mutex::new(None),
             client_tasks: Arc::new(Mutex::new(Vec::new())),
         });
 
-        let clients: ClientWriters = Arc::new(Mutex::new(HashMap::new()));
         let client_tasks = Arc::clone(&step.client_tasks);
         let context_for_accept = step.context.clone();
         let running_for_accept = Arc::clone(&step.running);
@@ -124,7 +125,9 @@ impl TcpServerStep {
                                     &mut packet_buffer,
                                     end_flag_for_reader.as_deref(),
                                     &read_buffer[..size],
-                                ).is_err() {
+                                )
+                                .is_err()
+                                {
                                     break;
                                 }
                             }
@@ -137,7 +140,6 @@ impl TcpServerStep {
                     }
                 });
 
-                // 每个客户端独立写，工作流写任务会把 payload 投递到 client_rx。
                 let writer_task = async_runtime::spawn(async move {
                     while let Some(payload) = client_rx.recv().await {
                         if writer.write_all(&payload).await.is_err() {
@@ -154,40 +156,8 @@ impl TcpServerStep {
             }
         });
 
-        let running_for_write = Arc::clone(&step.running);
-        let clients_for_write = Arc::clone(&clients);
-        let mut subscription = step.context.read()?;
-        let write_task = async_runtime::spawn(async move {
-            while running_for_write.load(Ordering::Relaxed) {
-                let Some(step_msg) = subscription.rx.recv().await else {
-                    break;
-                };
-                let payload = match value_to_bytes(&step_msg.msg) {
-                    Ok(payload) => payload,
-                    Err(err) => {
-                        eprintln!("tcpserverstep ignored invalid message: {err}");
-                        continue;
-                    }
-                };
-                if payload.is_empty() {
-                    continue;
-                }
-
-                // 当前实现按文档默认广播给所有客户端。
-                // 后续如果增加 write_mode，可以在这里改为最新客户端或指定客户端。
-                if let Ok(clients) = clients_for_write.lock() {
-                    for client_tx in clients.values() {
-                        let _ = client_tx.send(payload.clone());
-                    }
-                }
-            }
-        });
-
         if let Ok(mut task) = step.accept_task.lock() {
             *task = Some(accept_task);
-        }
-        if let Ok(mut task) = step.write_task.lock() {
-            *task = Some(write_task);
         }
 
         Ok(step)
@@ -206,18 +176,33 @@ impl TcpServerStep {
                 let packet_end = index + flag.len();
                 let payload = packet_buffer[..packet_end].to_vec();
                 packet_buffer.drain(..packet_end);
-                context.write(payload)?;
+                context.write_up(payload)?;
             }
         } else {
-            context.write(received.to_vec())?;
+            context.write_up(received.to_vec())?;
         }
         Ok(())
     }
 }
 
 impl BaseStep for TcpServerStep {
-    fn context(&self) -> &BaseStepContext {
-        &self.context
+    fn read_up(&self, step_msg: StepMsg<Value>) {
+        let payload = match value_to_bytes(&step_msg.msg) {
+            Ok(payload) => payload,
+            Err(err) => {
+                eprintln!("tcpserverstep ignored invalid message: {err}");
+                return;
+            }
+        };
+        if payload.is_empty() {
+            return;
+        }
+
+        if let Ok(clients) = self.clients.lock() {
+            for client_tx in clients.values() {
+                let _ = client_tx.send(payload.clone());
+            }
+        }
     }
 }
 
@@ -226,9 +211,8 @@ impl StepManifestProvider for TcpServerStep {
         StepManifest {
             r#type: "TcpServerStep".to_string(),
             name: "TCP 服务端".to_string(),
-            description:
-                "监听本地 TCP 端口，接收客户端数据并发布上行消息，订阅下行消息后广播写回客户端"
-                    .to_string(),
+            description: "监听本地 TCP 端口，接收客户端数据并发布上行消息，读取下行消息后广播写回客户端"
+                .to_string(),
             default_data: serde_json::json!([
                    {
                     "title": "结束符(HEX)",
@@ -258,11 +242,6 @@ impl Drop for TcpServerStep {
         self.running.store(false, Ordering::Relaxed);
 
         if let Ok(mut task) = self.accept_task.lock() {
-            if let Some(handle) = task.take() {
-                handle.abort();
-            }
-        }
-        if let Ok(mut task) = self.write_task.lock() {
             if let Some(handle) = task.take() {
                 handle.abort();
             }

@@ -1,85 +1,59 @@
-use crate::step::model::{MsgType, StepManifest};
-use crate::step::workflow::{Workflow, WorkflowSubscription};
+use crate::step::model::{MsgType, StepManifest, StepMsg};
+use crate::step::workflow::Workflow;
 use serde::Serialize;
+use serde_json::Value;
 use std::sync::{Arc, Weak};
 
 /// 步骤基础上下文。
-/// 所有具体步骤都会持有当前节点定义和所属工作流实例。
 #[derive(Debug, Clone)]
 pub struct BaseStepContext {
-    /// 当前步骤对应的工作流节点。
     id: String,
-    node_type: String,
-    /// 当前节点所属工作流实例。
-    pub workflow: Weak<Workflow>,
+    workflow: Weak<Workflow>,
 }
 
 impl BaseStepContext {
-    /// 创建步骤基础上下文。
-    pub fn new(
-        id: impl Into<String>,
-        node_type: impl Into<String>,
-        workflow: Arc<Workflow>,
-    ) -> Self {
+    pub fn new(id: impl Into<String>, workflow: Arc<Workflow>) -> Self {
         Self {
             id: id.into(),
-            node_type: node_type.into(),
             workflow: Arc::downgrade(&workflow),
         }
     }
 
-    /// 获取当前步骤 id。
     pub fn id(&self) -> &str {
         &self.id
     }
 
-    /// 获取当前步骤类型。
-    pub fn node_type(&self) -> &str {
-        &self.node_type
+    fn workflow(&self) -> Result<Arc<Workflow>, String> {
+        self.workflow
+            .upgrade()
+            .ok_or_else(|| format!("workflow dropped for step {}", self.id))
     }
 
-    /// 获取当前所属工作流实例。
-    pub fn workflow(&self) -> Option<Arc<Workflow>> {
-        self.workflow.upgrade()
-    }
-
-    /// 读取上级步骤下发的消息。
-    pub fn read(&self) -> Result<WorkflowSubscription, String> {
-        let workflow = self
-            .workflow()
-            .ok_or_else(|| format!("workflow dropped for step {}", self.id()))?;
-
-        Ok(workflow.subscribe_step(self.id().to_string(), MsgType::Down))
-    }
-
-    /// 向上级步骤发布消息。
-    pub fn write<T>(&self, msg: T) -> Result<usize, String>
+    /// 向下级步骤发布消息。
+    pub fn write_down<T>(&self, msg: T) -> Result<usize, String>
     where
         T: Serialize,
     {
-        let workflow = self
-            .workflow()
-            .ok_or_else(|| format!("workflow dropped for step {}", self.id()))?;
+        self.workflow()?
+            .publish(self.id.to_string(), MsgType::Down, msg)
+    }
 
-        workflow.publish(self.id().to_string(), MsgType::Up, msg)
+    /// 向上级步骤发布消息。
+    pub fn write_up<T>(&self, msg: T) -> Result<usize, String>
+    where
+        T: Serialize,
+    {
+        self.workflow()?.publish(self.id.to_string(), MsgType::Up, msg)
     }
 }
 
-/// 所有步骤的公共能力。
-/// 具体步骤通过组合 BaseStepContext 来复用基础字段。
+/// 所有步骤的公共消息能力。
 pub trait BaseStep: Send + Sync {
-    /// 获取步骤基础上下文。
-    fn context(&self) -> &BaseStepContext;
+    /// 上级消息下发到当前步骤时触发。
+    fn read_up(&self, _step_msg: StepMsg<Value>) {}
 
-    /// 获取当前步骤 id。
-    fn id(&self) -> &str {
-        self.context().id()
-    }
-
-    /// 获取当前步骤类型。
-    fn node_type(&self) -> &str {
-        self.context().node_type()
-    }
+    /// 下级消息上行到当前步骤时触发。
+    fn read_down(&self, _step_msg: StepMsg<Value>) {}
 }
 
 /// 步骤元数据提供者。

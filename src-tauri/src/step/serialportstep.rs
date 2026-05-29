@@ -1,9 +1,10 @@
 use crate::step::basestep::{BaseStep, BaseStepContext, StepManifestProvider};
 use crate::step::model::{
-    find_bytes, parse_hex_end_flag, value_to_bytes, StepManifest, WorkflowNode,
+    find_bytes, parse_hex_end_flag, value_to_bytes, StepManifest, StepMsg, WorkflowNode,
 };
 use crate::step::workflow::Workflow;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::io::{ErrorKind, Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -57,20 +58,20 @@ fn default_flow_control() -> String {
 }
 
 /// 串口步骤。
-/// 1. 订阅来自上级步骤的消息。
+/// 1. 读取来自上级步骤的消息。
 /// 2. 收到消息后写入串口。
 /// 3. 从串口读取到数据后，再向上级发布消息。
 pub struct SerialPortStep {
     context: BaseStepContext,
     running: Arc<AtomicBool>,
-    write_task: Mutex<Option<JoinHandle<()>>>,
+    writer: Arc<Mutex<Box<dyn serialport::SerialPort>>>,
     read_task: Mutex<Option<JoinHandle<()>>>,
 }
 
 impl SerialPortStep {
     /// 创建并启动串口步骤。
     pub fn new(node: &WorkflowNode, workflow: Arc<Workflow>) -> Result<Arc<Self>, String> {
-        let context = BaseStepContext::new(&node.id, &node.r#type, Arc::clone(&workflow));
+        let context = BaseStepContext::new(&node.id, Arc::clone(&workflow));
         let data = node
             .data
             .parse::<SerialPortStepData>()
@@ -96,35 +97,8 @@ impl SerialPortStep {
         let step = Arc::new(Self {
             context,
             running: Arc::new(AtomicBool::new(true)),
-            write_task: Mutex::new(None),
+            writer: Arc::clone(&writer),
             read_task: Mutex::new(None),
-        });
-
-        let mut subscription = step.context.read()?;
-        let writer_for_task = Arc::clone(&writer);
-        let running_for_write = Arc::clone(&step.running);
-        let write_task = async_runtime::spawn(async move {
-            while running_for_write.load(Ordering::Relaxed) {
-                let Some(step_msg) = subscription.rx.recv().await else {
-                    break;
-                };
-                let payload = match value_to_bytes(&step_msg.msg) {
-                    Ok(payload) => payload,
-                    Err(err) => {
-                        eprintln!("serialportstep ignored invalid message: {err}");
-                        continue;
-                    }
-                };
-                if payload.is_empty() {
-                    continue;
-                }
-
-                // 串口写入使用阻塞接口，这里直接串行写入即可。
-                if let Ok(mut port) = writer_for_task.lock() {
-                    let _ = port.write_all(&payload);
-                    let _ = port.flush();
-                }
-            }
         });
 
         let context_for_read = step.context.clone();
@@ -146,13 +120,13 @@ impl SerialPortStep {
                                 let packet_end = index + flag.len();
                                 let payload = packet_buffer[..packet_end].to_vec();
                                 packet_buffer.drain(..packet_end);
-                                if context_for_read.write(payload).is_err() {
+                                if context_for_read.write_up(payload).is_err() {
                                     return;
                                 }
                             }
                         } else {
                             let payload = received.to_vec();
-                            if context_for_read.write(payload).is_err() {
+                            if context_for_read.write_up(payload).is_err() {
                                 return;
                             }
                         }
@@ -164,9 +138,6 @@ impl SerialPortStep {
             }
         });
 
-        if let Ok(mut task) = step.write_task.lock() {
-            *task = Some(write_task);
-        }
         if let Ok(mut task) = step.read_task.lock() {
             *task = Some(read_task);
         }
@@ -216,8 +187,22 @@ impl SerialPortStep {
 }
 
 impl BaseStep for SerialPortStep {
-    fn context(&self) -> &BaseStepContext {
-        &self.context
+    fn read_up(&self, step_msg: StepMsg<Value>) {
+        let payload = match value_to_bytes(&step_msg.msg) {
+            Ok(payload) => payload,
+            Err(err) => {
+                eprintln!("serialportstep ignored invalid message: {err}");
+                return;
+            }
+        };
+        if payload.is_empty() {
+            return;
+        }
+
+        if let Ok(mut port) = self.writer.lock() {
+            let _ = port.write_all(&payload);
+            let _ = port.flush();
+        }
     }
 }
 
@@ -226,7 +211,7 @@ impl StepManifestProvider for SerialPortStep {
         StepManifest {
             r#type: "SerialPortStep".to_string(),
             name: "串口通信".to_string(),
-            description: "订阅上级消息并写入串口，串口收到数据后再向上级发布消息".to_string(),
+            description: "读取上级消息并写入串口，串口收到数据后再向上级发布消息".to_string(),
             default_data: serde_json::json!([
                         {
                             "title": "结束符(HEX)",
@@ -290,11 +275,6 @@ impl Drop for SerialPortStep {
     fn drop(&mut self) {
         self.running.store(false, Ordering::Relaxed);
 
-        if let Ok(mut task) = self.write_task.lock() {
-            if let Some(handle) = task.take() {
-                handle.abort();
-            }
-        }
         if let Ok(mut task) = self.read_task.lock() {
             if let Some(handle) = task.take() {
                 handle.abort();

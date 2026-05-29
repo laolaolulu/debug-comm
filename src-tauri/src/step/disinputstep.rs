@@ -1,4 +1,4 @@
-use crate::step::basestep::{BaseStep, BaseStepContext, StepManifestProvider};
+use crate::step::basestep::{BaseStep, StepManifestProvider};
 use crate::step::model::{StepManifest, WorkflowNode};
 use crate::step::workflow::Workflow;
 use serde::{Deserialize, Serialize};
@@ -19,29 +19,21 @@ pub struct DisInputStepData {
 /// 发送数据窗口步骤。
 ///
 /// 发送动作由外部通过 step id 完成。
-pub struct DisInputStep {
-    context: BaseStepContext,
-}
+pub struct DisInputStep;
 
 impl DisInputStep {
     /// 创建发送数据窗口步骤。
-    pub fn new(node: &WorkflowNode, workflow: Arc<Workflow>) -> Result<Arc<Self>, String> {
-        let context = BaseStepContext::new(&node.id, &node.r#type, workflow);
-
+    pub fn new(node: &WorkflowNode, _workflow: Arc<Workflow>) -> Result<Arc<Self>, String> {
         // 这里解析一次 data，主要用于尽早发现前端传入结构不符合约定的问题。
         node.data
             .parse::<DisInputStepData>()
-            .map_err(|err| format!("disinputstep[{}] invalid data: {err}", context.id()))?;
+            .map_err(|err| format!("disinputstep[{}] invalid data: {err}", node.id))?;
 
-        Ok(Arc::new(Self { context }))
+        Ok(Arc::new(Self))
     }
 }
 
-impl BaseStep for DisInputStep {
-    fn context(&self) -> &BaseStepContext {
-        &self.context
-    }
-}
+impl BaseStep for DisInputStep {}
 
 impl StepManifestProvider for DisInputStep {
     fn manifest() -> StepManifest {
