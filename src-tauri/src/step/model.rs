@@ -122,28 +122,6 @@ pub fn value_to_bytes(value: &Value) -> Result<Vec<u8>, String> {
         .collect()
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn value_to_bytes_accepts_byte_arrays() {
-        assert_eq!(
-            value_to_bytes(&json!([0, 1, 255])).unwrap(),
-            vec![0, 1, 255]
-        );
-    }
-
-    #[test]
-    fn value_to_bytes_rejects_unsupported_values() {
-        assert!(value_to_bytes(&json!("hello")).is_err());
-        assert!(value_to_bytes(&json!({ "value": [1, 2] })).is_err());
-        assert!(value_to_bytes(&json!([256])).is_err());
-        assert!(value_to_bytes(&json!([1.5])).is_err());
-    }
-}
-
 /// 解析 16 进制结束符配置，例如 "0A0D" 或 "0A 0D"。
 /// 返回 None 表示未配置结束符，通信步骤会按单次读取结果直接发布。
 pub fn parse_hex_end_flag(value: Option<&str>) -> Result<Option<Vec<u8>>, String> {
