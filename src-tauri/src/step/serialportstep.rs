@@ -41,18 +41,22 @@ pub struct SerialPortStepData {
     pub flow_control: String,
 }
 
+/// 返回默认数据位。
 fn default_data_bits() -> u8 {
     8
 }
 
+/// 返回默认停止位。
 fn default_stop_bits() -> u8 {
     1
 }
 
+/// 返回默认校验位。
 fn default_parity() -> String {
     "none".to_string()
 }
 
+/// 返回默认流控方式。
 fn default_flow_control() -> String {
     "none".to_string()
 }
@@ -187,6 +191,7 @@ impl SerialPortStep {
 }
 
 impl BaseStep for SerialPortStep {
+    /// 接收上级下行消息并写入串口。
     fn read_up(&self, step_msg: StepMsg<Value>) {
         let payload = match value_to_bytes(&step_msg.msg) {
             Ok(payload) => payload,
@@ -207,6 +212,7 @@ impl BaseStep for SerialPortStep {
 }
 
 impl StepManifestProvider for SerialPortStep {
+    /// 返回串口通信步骤元数据。
     fn manifest() -> StepManifest {
         StepManifest {
             r#type: "SerialPortStep".to_string(),
@@ -272,6 +278,7 @@ impl StepManifestProvider for SerialPortStep {
 }
 
 impl Drop for SerialPortStep {
+    /// 停止串口读取任务。
     fn drop(&mut self) {
         self.running.store(false, Ordering::Relaxed);
 

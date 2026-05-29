@@ -12,6 +12,7 @@ pub struct BaseStepContext {
 }
 
 impl BaseStepContext {
+    /// 创建步骤上下文并弱引用所属工作流。
     pub fn new(id: impl Into<String>, workflow: Arc<Workflow>) -> Self {
         Self {
             id: id.into(),
@@ -19,10 +20,12 @@ impl BaseStepContext {
         }
     }
 
+    /// 返回当前步骤 id。
     pub fn id(&self) -> &str {
         &self.id
     }
 
+    /// 获取所属工作流实例。
     fn workflow(&self) -> Result<Arc<Workflow>, String> {
         self.workflow
             .upgrade()
@@ -43,7 +46,8 @@ impl BaseStepContext {
     where
         T: Serialize,
     {
-        self.workflow()?.publish(self.id.to_string(), MsgType::Up, msg)
+        self.workflow()?
+            .publish(self.id.to_string(), MsgType::Up, msg)
     }
 }
 
@@ -59,6 +63,7 @@ pub trait BaseStep: Send + Sync {
 /// 步骤元数据提供者。
 /// 用于向前端导出可创建的步骤列表和默认节点 data。
 pub trait StepManifestProvider {
+    /// 返回步骤在前端可创建列表中的元数据。
     fn manifest() -> StepManifest
     where
         Self: Sized;

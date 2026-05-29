@@ -127,6 +127,7 @@ impl TcpClientStep {
 }
 
 impl BaseStep for TcpClientStep {
+    /// 接收上级下行消息并写入 TCP 连接。
     fn read_up(&self, step_msg: StepMsg<Value>) {
         let payload = match value_to_bytes(&step_msg.msg) {
             Ok(payload) => payload,
@@ -153,6 +154,7 @@ impl BaseStep for TcpClientStep {
 }
 
 impl StepManifestProvider for TcpClientStep {
+    /// 返回 TCP 客户端步骤元数据。
     fn manifest() -> StepManifest {
         StepManifest {
             r#type: "TcpClientStep".to_string(),
@@ -184,6 +186,7 @@ impl StepManifestProvider for TcpClientStep {
 }
 
 impl Drop for TcpClientStep {
+    /// 停止 TCP 客户端后台任务。
     fn drop(&mut self) {
         self.running.store(false, Ordering::Relaxed);
 

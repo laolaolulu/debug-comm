@@ -60,6 +60,7 @@ impl DisOutputStep {
 }
 
 impl BaseStep for DisOutputStep {
+    /// 接收下级上行消息并推送到前端。
     fn read_down(&self, step_msg: StepMsg<Value>) {
         let Some(app) = &self.app else {
             return;
@@ -76,6 +77,7 @@ impl BaseStep for DisOutputStep {
 }
 
 impl StepManifestProvider for DisOutputStep {
+    /// 返回接收数据窗口步骤元数据。
     fn manifest() -> StepManifest {
         StepManifest {
             r#type: "DisOutputStep".to_string(),
@@ -86,6 +88,7 @@ impl StepManifestProvider for DisOutputStep {
     }
 }
 
+/// 返回当前毫秒时间戳。
 fn current_time_millis() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)

@@ -194,7 +194,8 @@ impl Workflow {
     ) -> Result<Arc<dyn BaseStep>, String> {
         match node.r#type.to_lowercase().as_str() {
             "disinputstep" => {
-                let step: Arc<dyn BaseStep> = DisInputStep::new(node, Arc::clone(self))?;
+                let step: Arc<dyn BaseStep> =
+                    DisInputStep::new(node, Arc::clone(self), self.app.clone())?;
                 Ok(step)
             }
             "disoutputstep" => {
@@ -291,6 +292,7 @@ impl Workflow {
         sorted
     }
 
+    /// 根据消息方向找到需要触发的相邻步骤。
     fn message_targets(&self, step_msg: &StepMsg<Value>) -> Vec<Arc<dyn BaseStep>> {
         let target_ids = self
             .edges

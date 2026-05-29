@@ -1,5 +1,5 @@
 import { ClearOutlined, SendOutlined } from '@ant-design/icons';
-import { invoke } from '@tauri-apps/api/core';
+import { emit } from '@tauri-apps/api/event';
 import {
   App,
   Button,
@@ -176,8 +176,7 @@ const InputPanel = ({ node }: { node: WorkflowNode }) => {
                 const payload =
                   mode === 'hex' ? parseHex(value, hexMessages) : value;
                 const msg = payloadToBytes(payload);
-                await invoke('publish_step_message', {
-                  workflowId: select.id,
+                await emit('workflow-step-input-message', {
                   stepId: node.id,
                   msg: Array.from(msg),
                 });

@@ -34,6 +34,7 @@ pub struct TcpServerStepData {
     pub max_read_bytes: usize,
 }
 
+/// 返回默认单次读取字节数。
 fn default_max_read_bytes() -> usize {
     1024
 }
@@ -68,8 +69,8 @@ impl TcpServerStep {
 
         // 使用 std listener 先做同步 bind，可以让 new 直接把端口占用等错误返回给调用方。
         let address = format!("{}:{}", data.bind_addr, data.port);
-        let std_listener =
-            StdTcpListener::bind(&address).map_err(|err| format!("bind {address} failed: {err}"))?;
+        let std_listener = StdTcpListener::bind(&address)
+            .map_err(|err| format!("bind {address} failed: {err}"))?;
         std_listener
             .set_nonblocking(true)
             .map_err(|err| format!("set {address} nonblocking failed: {err}"))?;
@@ -186,6 +187,7 @@ impl TcpServerStep {
 }
 
 impl BaseStep for TcpServerStep {
+    /// 接收上级下行消息并广播给所有客户端。
     fn read_up(&self, step_msg: StepMsg<Value>) {
         let payload = match value_to_bytes(&step_msg.msg) {
             Ok(payload) => payload,
@@ -207,12 +209,14 @@ impl BaseStep for TcpServerStep {
 }
 
 impl StepManifestProvider for TcpServerStep {
+    /// 返回 TCP 服务端步骤元数据。
     fn manifest() -> StepManifest {
         StepManifest {
             r#type: "TcpServerStep".to_string(),
             name: "TCP 服务端".to_string(),
-            description: "监听本地 TCP 端口，接收客户端数据并发布上行消息，读取下行消息后广播写回客户端"
-                .to_string(),
+            description:
+                "监听本地 TCP 端口，接收客户端数据并发布上行消息，读取下行消息后广播写回客户端"
+                    .to_string(),
             default_data: serde_json::json!([
                    {
                     "title": "结束符(HEX)",
@@ -238,6 +242,7 @@ impl StepManifestProvider for TcpServerStep {
 }
 
 impl Drop for TcpServerStep {
+    /// 停止监听任务和客户端任务。
     fn drop(&mut self) {
         self.running.store(false, Ordering::Relaxed);
 

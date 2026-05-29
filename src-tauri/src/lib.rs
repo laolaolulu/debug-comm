@@ -3,8 +3,7 @@ pub mod step;
 #[cfg(not(target_os = "android"))]
 use serialport::available_ports;
 
-use serde_json::Value;
-use step::model::{value_to_bytes, MsgType, StepManifest, WorkflowDefinition};
+use step::model::{StepManifest, WorkflowDefinition};
 use step::workflow::Workflow;
 use tauri::AppHandle;
 
@@ -19,6 +18,7 @@ fn start_workflow(app: AppHandle, json: &str) -> Result<String, String> {
     Ok(workflow_id)
 }
 
+/// 反序列化工作流配置，创建并注册运行实例。
 fn start_workflow_instance(
     json: &str,
     app: Option<AppHandle>,
@@ -36,15 +36,6 @@ fn start_workflow_instance(
     Workflow::register_running(&workflow);
 
     Ok(workflow)
-}
-
-#[tauri::command]
-fn publish_step_message(workflow_id: &str, step_id: &str, msg: Value) -> Result<(), String> {
-    let workflow =
-        Workflow::get(workflow_id).ok_or_else(|| format!("workflow not found: {workflow_id}"))?;
-    let payload = value_to_bytes(&msg)?;
-    workflow.publish(step_id.to_string(), MsgType::Down, payload)?;
-    Ok(())
 }
 
 /// 停止工作流：
@@ -90,6 +81,7 @@ fn get_serial_ports() -> Result<Vec<String>, String> {
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+/// 启动 Tauri 应用并注册后端命令。
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -101,7 +93,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             start_workflow,
             stop_workflow,
-            publish_step_message,
             get_workflow_ids,
             get_step_manifests,
             get_serial_ports
