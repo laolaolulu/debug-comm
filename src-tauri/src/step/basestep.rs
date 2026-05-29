@@ -1,5 +1,6 @@
-use crate::step::model::StepManifest;
-use crate::step::workflow::Workflow;
+use crate::step::model::{MsgType, StepManifest};
+use crate::step::workflow::{Workflow, WorkflowSubscription};
+use serde::Serialize;
 use std::sync::{Arc, Weak};
 
 /// 步骤基础上下文。
@@ -40,6 +41,27 @@ impl BaseStepContext {
     /// 获取当前所属工作流实例。
     pub fn workflow(&self) -> Option<Arc<Workflow>> {
         self.workflow.upgrade()
+    }
+
+    /// 读取上级步骤下发的消息。
+    pub fn read(&self) -> Result<WorkflowSubscription, String> {
+        let workflow = self
+            .workflow()
+            .ok_or_else(|| format!("workflow dropped for step {}", self.id()))?;
+
+        Ok(workflow.subscribe_step(self.id().to_string(), MsgType::Down))
+    }
+
+    /// 向上级步骤发布消息。
+    pub fn write<T>(&self, msg: T) -> Result<usize, String>
+    where
+        T: Serialize,
+    {
+        let workflow = self
+            .workflow()
+            .ok_or_else(|| format!("workflow dropped for step {}", self.id()))?;
+
+        workflow.publish(self.id().to_string(), MsgType::Up, msg)
     }
 }
 

@@ -1,6 +1,6 @@
 use crate::step::basestep::{BaseStep, BaseStepContext, StepManifestProvider};
 use crate::step::model::{
-    find_bytes, parse_hex_end_flag, value_to_bytes, MsgType, StepManifest, WorkflowNode,
+    find_bytes, parse_hex_end_flag, value_to_bytes, StepManifest, WorkflowNode,
 };
 use crate::step::workflow::Workflow;
 use serde::{Deserialize, Serialize};
@@ -57,10 +57,9 @@ impl TcpClientStep {
         });
 
         let address = format!("{}:{}", data.host, data.port);
-        let step_id = step.id().to_string();
         let running = Arc::clone(&step.running);
-        let workflow_for_task = Arc::downgrade(&workflow);
-        let mut subscription = workflow.subscribe_step(step.id().to_string(), MsgType::Down);
+        let context_for_task = step.context.clone();
+        let mut subscription = step.context.read()?;
 
         let task = async_runtime::spawn(async move {
             let Ok(mut stream) = TcpStream::connect(&address).await else {
@@ -96,15 +95,12 @@ impl TcpClientStep {
                             Ok(0) => break,
                             Ok(size) => {
                                 let received = &read_buffer[..size];
-                                if let Some(workflow) = workflow_for_task.upgrade() {
-                                    Self::publish_received(
-                                        &workflow,
-                                        &step_id,
-                                        &mut packet_buffer,
-                                        end_flag.as_deref(),
-                                        received,
-                                    );
-                                } else {
+                                if Self::publish_received(
+                                    &context_for_task,
+                                    &mut packet_buffer,
+                                    end_flag.as_deref(),
+                                    received,
+                                ).is_err() {
                                     break;
                                 }
                             }
@@ -124,23 +120,23 @@ impl TcpClientStep {
 
     /// 根据是否配置结束符，发布原始读取数据或完整数据包。
     fn publish_received(
-        workflow: &Workflow,
-        step_id: &str,
+        context: &BaseStepContext,
         packet_buffer: &mut Vec<u8>,
         end_flag: Option<&[u8]>,
         received: &[u8],
-    ) {
+    ) -> Result<(), String> {
         if let Some(flag) = end_flag {
             packet_buffer.extend_from_slice(received);
             while let Some(index) = find_bytes(packet_buffer, flag) {
                 let packet_end = index + flag.len();
                 let payload = packet_buffer[..packet_end].to_vec();
                 packet_buffer.drain(..packet_end);
-                let _ = workflow.publish(step_id.to_string(), MsgType::Up, payload);
+                context.write(payload)?;
             }
         } else {
-            let _ = workflow.publish(step_id.to_string(), MsgType::Up, received.to_vec());
+            context.write(received.to_vec())?;
         }
+        Ok(())
     }
 }
 

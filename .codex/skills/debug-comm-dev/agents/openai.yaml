@@ -1,0 +1,4 @@
+interface:
+  display_name: "debug-comm 开发"
+  short_description: "debug-comm 精简开发约定"
+  default_prompt: "在 debug-comm 仓库中使用这个 skill。保持改动精简、局部、直接，并贴合现有 Tauri、React、TypeScript、Rust、工作流、i18n 和 Zustand 模式。"

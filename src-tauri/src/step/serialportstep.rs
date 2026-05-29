@@ -1,6 +1,6 @@
 use crate::step::basestep::{BaseStep, BaseStepContext, StepManifestProvider};
 use crate::step::model::{
-    find_bytes, parse_hex_end_flag, value_to_bytes, MsgType, StepManifest, WorkflowNode,
+    find_bytes, parse_hex_end_flag, value_to_bytes, StepManifest, WorkflowNode,
 };
 use crate::step::workflow::Workflow;
 use serde::{Deserialize, Serialize};
@@ -100,7 +100,7 @@ impl SerialPortStep {
             read_task: Mutex::new(None),
         });
 
-        let mut subscription = workflow.subscribe_step(step.id().to_string(), MsgType::Down);
+        let mut subscription = step.context.read()?;
         let writer_for_task = Arc::clone(&writer);
         let running_for_write = Arc::clone(&step.running);
         let write_task = async_runtime::spawn(async move {
@@ -127,8 +127,7 @@ impl SerialPortStep {
             }
         });
 
-        let workflow_for_read = Arc::downgrade(&workflow);
-        let step_id = step.id().to_string();
+        let context_for_read = step.context.clone();
         let running_for_read = Arc::clone(&step.running);
         let read_task = async_runtime::spawn_blocking(move || {
             let mut buffer = vec![0_u8; 1024];
@@ -147,17 +146,13 @@ impl SerialPortStep {
                                 let packet_end = index + flag.len();
                                 let payload = packet_buffer[..packet_end].to_vec();
                                 packet_buffer.drain(..packet_end);
-                                if let Some(workflow) = workflow_for_read.upgrade() {
-                                    let _ = workflow.publish(step_id.clone(), MsgType::Up, payload);
-                                } else {
+                                if context_for_read.write(payload).is_err() {
                                     return;
                                 }
                             }
                         } else {
                             let payload = received.to_vec();
-                            if let Some(workflow) = workflow_for_read.upgrade() {
-                                let _ = workflow.publish(step_id.clone(), MsgType::Up, payload);
-                            } else {
+                            if context_for_read.write(payload).is_err() {
                                 return;
                             }
                         }

@@ -305,10 +305,8 @@ TCP 服务端步骤。
 当前已实现内容：
 
 - 创建时解析节点 data。
-- 订阅与接收窗口相邻的步骤消息，兼容接收窗口放在通信节点任一侧的画布连线。
-- 收到消息后通过 Tauri `workflow-step-message` 事件推送给前端。
-- 前端负责写入 IndexedDB 和界面缓存，后端不再做接收日志持久化。
-- `Drop` 时停止后台接收任务。
+- 只作为接收窗口节点占位和 manifest 提供者。
+- 消息监听由外部按 step id 完成。
 
 ### `disinputstep.rs`
 
@@ -318,8 +316,8 @@ TCP 服务端步骤。
 当前已实现内容：
 
 - 创建时解析节点 data。
-- 作为前端人工输入入口的运行占位。
-- 提供 `publish_down` 方法，可通过当前步骤向下游发布 `MsgType::Down` 消息。
+- 只作为发送窗口节点占位和 manifest 提供者。
+- 消息发布由外部按 step id 完成。
 - 已接入 `Workflow::available_steps` 和 `Workflow::instantiate_step`。
 
 ## 扩展一个新步骤的建议流程

@@ -1,6 +1,6 @@
 use crate::step::basestep::{BaseStep, BaseStepContext, StepManifestProvider};
 use crate::step::model::{
-    find_bytes, parse_hex_end_flag, value_to_bytes, MsgType, StepManifest, WorkflowNode,
+    find_bytes, parse_hex_end_flag, value_to_bytes, StepManifest, WorkflowNode,
 };
 use crate::step::workflow::Workflow;
 use serde::{Deserialize, Serialize};
@@ -85,10 +85,9 @@ impl TcpServerStep {
 
         let clients: ClientWriters = Arc::new(Mutex::new(HashMap::new()));
         let client_tasks = Arc::clone(&step.client_tasks);
-        let step_id = step.id().to_string();
+        let context_for_accept = step.context.clone();
         let running_for_accept = Arc::clone(&step.running);
         let clients_for_accept = Arc::clone(&clients);
-        let workflow_for_accept = Arc::downgrade(&workflow);
         let max_read_bytes = data.max_read_bytes.max(1);
         let accept_task = async_runtime::spawn(async move {
             let mut next_client_id = 1_usize;
@@ -108,8 +107,7 @@ impl TcpServerStep {
                 }
 
                 let clients_for_reader = Arc::clone(&clients_for_accept);
-                let workflow_for_reader = workflow_for_accept.clone();
-                let step_id_for_reader = step_id.clone();
+                let context_for_reader = context_for_accept.clone();
                 let end_flag_for_reader = end_flag.clone();
 
                 // 每个客户端独立读。客户端断开或读取失败时，移除它的写入通道。
@@ -121,15 +119,12 @@ impl TcpServerStep {
                         match reader.read(&mut read_buffer).await {
                             Ok(0) => break,
                             Ok(size) => {
-                                if let Some(workflow) = workflow_for_reader.upgrade() {
-                                    Self::publish_received(
-                                        &workflow,
-                                        &step_id_for_reader,
-                                        &mut packet_buffer,
-                                        end_flag_for_reader.as_deref(),
-                                        &read_buffer[..size],
-                                    );
-                                } else {
+                                if Self::publish_received(
+                                    &context_for_reader,
+                                    &mut packet_buffer,
+                                    end_flag_for_reader.as_deref(),
+                                    &read_buffer[..size],
+                                ).is_err() {
                                     break;
                                 }
                             }
@@ -161,7 +156,7 @@ impl TcpServerStep {
 
         let running_for_write = Arc::clone(&step.running);
         let clients_for_write = Arc::clone(&clients);
-        let mut subscription = workflow.subscribe_step(step.id().to_string(), MsgType::Down);
+        let mut subscription = step.context.read()?;
         let write_task = async_runtime::spawn(async move {
             while running_for_write.load(Ordering::Relaxed) {
                 let Some(step_msg) = subscription.rx.recv().await else {
@@ -200,23 +195,23 @@ impl TcpServerStep {
 
     /// 根据是否配置结束符，发布原始读取数据或完整数据包。
     fn publish_received(
-        workflow: &Workflow,
-        step_id: &str,
+        context: &BaseStepContext,
         packet_buffer: &mut Vec<u8>,
         end_flag: Option<&[u8]>,
         received: &[u8],
-    ) {
+    ) -> Result<(), String> {
         if let Some(flag) = end_flag {
             packet_buffer.extend_from_slice(received);
             while let Some(index) = find_bytes(packet_buffer, flag) {
                 let packet_end = index + flag.len();
                 let payload = packet_buffer[..packet_end].to_vec();
                 packet_buffer.drain(..packet_end);
-                let _ = workflow.publish(step_id.to_string(), MsgType::Up, payload);
+                context.write(payload)?;
             }
         } else {
-            let _ = workflow.publish(step_id.to_string(), MsgType::Up, received.to_vec());
+            context.write(received.to_vec())?;
         }
+        Ok(())
     }
 }
 
