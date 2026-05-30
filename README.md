@@ -34,9 +34,7 @@ debug-comm 以可视化工作流的方式组织通信链路，支持串口、TCP
 | 自动更新 | Tauri Updater、Process 插件 |
 
 ## 基础通信测试演示
-
-
-![基础通信测试演示](https://debug-comm.laolaolulu.com/assets/communication-demo.mp4)
+<video src="https://debug-comm.laolaolulu.com/assets/communication-demo.mp4" controls  width="100%" preload="metadata" poster="wwwroot/assets/poster.jpg"></video>
 
 ## 节点类型
 
