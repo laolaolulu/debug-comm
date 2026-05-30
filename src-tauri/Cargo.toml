@@ -1,6 +1,6 @@
 [package]
 name = "debug-comm"
-version = "0.1.0-alpha.7"
+version = "0.1.0-alpha.18"
 description = "Communication debugging"
 authors = ["lipeng"]
 edition = "2021"

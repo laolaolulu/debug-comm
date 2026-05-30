@@ -1,0 +1,4 @@
+interface:
+  display_name: "Debug Comm Release"
+  short_description: "Release debug-comm version commit and remote tag"
+  default_prompt: "发布 v0.1.0-alpha.18 新增JS自动化脚本步骤"
