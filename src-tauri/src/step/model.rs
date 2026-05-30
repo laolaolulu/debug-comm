@@ -23,7 +23,7 @@ pub struct StepMsg<T> {
 }
 
 /// 工作流节点结构。
-#[derive(Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct WorkflowNode {
     /// 节点唯一标识。
     pub id: String,
@@ -35,7 +35,7 @@ pub struct WorkflowNode {
 }
 
 /// 工作流节点数据。
-#[derive(Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct WorkflowNodeData {
     /// 节点显示名称。
     pub name: String,
@@ -141,7 +141,7 @@ pub fn find_bytes(buffer: &[u8], needle: &[u8]) -> Option<usize> {
 pub struct StepManifest {
     /// 步骤类型。
     #[serde(rename = "type")]
-    pub r#type: &'static str,
+    pub r#type: String,
     /// 默认节点 data。
     pub data: StepManifestData,
 }
@@ -150,9 +150,9 @@ pub struct StepManifest {
 #[derive(Serialize)]
 pub struct StepManifestData {
     /// 前端显示名称。
-    pub name: &'static str,
+    pub name: String,
     /// 步骤说明。
-    pub description: &'static str,
+    pub description: String,
     /// 节点参数表单配置。
     pub columns: Vec<Value>,
 }

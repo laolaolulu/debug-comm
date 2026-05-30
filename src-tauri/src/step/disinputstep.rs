@@ -63,10 +63,10 @@ impl StepManifestProvider for DisInputStep {
     /// 返回发送数据窗口步骤元数据。
     fn manifest() -> StepManifest {
         StepManifest {
-            r#type: "DisInputStep",
+            r#type: "DisInputStep".into(),
             data: StepManifestData {
-                name: "发送数据窗口",
-                description: "接收前端发送事件，按 step id 向下发布消息",
+                name: "发送数据窗口".into(),
+                description: "接收前端发送事件，按 step id 向下发布消息".into(),
                 columns: vec![],
             },
         }

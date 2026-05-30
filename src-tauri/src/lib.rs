@@ -1,45 +1,24 @@
 pub mod step;
 
-use serialport::available_ports;
-
 use step::model::{StepManifest, WorkflowDefinition};
 use step::workflow::Workflow;
 use tauri::AppHandle;
 
-/// 启动工作流：
-/// 前端传入工作流设计器导出的 JSON 字符串，
-/// Rust 侧完成反序列化并创建工作流实例，同时注册到全局实例集合中。
+/// 启动工作流。
 #[tauri::command]
-fn start_workflow(app: AppHandle, json: &str) -> Result<String, String> {
-    let workflow = start_workflow_instance(json, Some(app))?;
-    let workflow_id = workflow.id().to_string();
-
-    Ok(workflow_id)
-}
-
-/// 反序列化工作流配置，创建并注册运行实例。
-fn start_workflow_instance(
-    json: &str,
-    app: Option<AppHandle>,
-) -> Result<std::sync::Arc<Workflow>, String> {
+fn start_workflow(json: &str, app: AppHandle) -> Result<(), String> {
     let definition =
         serde_json::from_str::<WorkflowDefinition>(json).map_err(|err| err.to_string())?;
 
     Workflow::remove(&definition.id);
 
-    let workflow = match app {
-        Some(app) => Workflow::new_with_app(definition, app),
-        None => Workflow::new(definition),
-    };
+    let workflow = Workflow::new_with_app(definition, app);
     workflow.run()?;
-    Workflow::register_running(&workflow);
 
-    Ok(workflow)
+    Ok(())
 }
 
-/// 停止工作流：
-/// 前端传入工作流 id，
-/// Rust 侧从全局实例集合中移除对应实例，移除后如果没有其他引用，实例会被自动销毁。
+/// 停止工作流。
 #[tauri::command]
 fn stop_workflow(id: &str) -> Result<(), String> {
     if Workflow::remove(id) {
@@ -49,27 +28,16 @@ fn stop_workflow(id: &str) -> Result<(), String> {
     }
 }
 
-/// 获取当前所有执行中的工作流 id 集合。
-/// 数据来源就是当前进程中的全局工作流实例集合。
+/// 获取当前执行中的工作流所有 id。
 #[tauri::command]
 fn get_workflow_ids() -> Vec<String> {
     Workflow::list_ids()
 }
 
-/// 获取所有可创建的步骤类型定义。
-/// 前端 StepList 可直接使用该数据生成拖拽列表。
+/// 获取所有可创建步骤。
 #[tauri::command]
 fn get_step_manifests() -> Vec<StepManifest> {
     Workflow::available_steps()
-}
-
-/// 查询当前系统可用串口列表。
-/// 前端可用于串口步骤的下拉选择，同时仍允许用户手动输入。
-#[tauri::command]
-fn get_serial_ports() -> Result<Vec<String>, String> {
-    available_ports()
-        .map(|ports| ports.into_iter().map(|port| port.port_name).collect())
-        .map_err(|err| err.to_string())
 }
 
 /// 启动 Tauri 应用并注册后端命令。
@@ -85,8 +53,7 @@ pub fn run() {
             start_workflow,
             stop_workflow,
             get_workflow_ids,
-            get_step_manifests,
-            get_serial_ports
+            get_step_manifests
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

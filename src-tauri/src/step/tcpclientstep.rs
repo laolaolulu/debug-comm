@@ -21,6 +21,7 @@ pub struct TcpClientStep {
 }
 
 impl TcpClientStep {
+    /// 创建 TCP 客户端步骤并启动连接读取任务。
     pub fn new(node: &WorkflowNode, workflow: Arc<Workflow>) -> Result<Arc<Self>, String> {
         let context = BaseStepContext::new(node, Arc::clone(&workflow));
         let end_flag =
@@ -81,6 +82,7 @@ impl TcpClientStep {
         Ok(step)
     }
 
+    /// 按结束符拆包并向上级步骤发布接收到的数据。
     fn publish_received(
         context: &BaseStepContext,
         packet_buffer: &mut Vec<u8>,
@@ -103,6 +105,7 @@ impl TcpClientStep {
 }
 
 impl BaseStep for TcpClientStep {
+    /// 接收上级下发消息并写入 TCP 连接。
     fn read_up(&self, step_msg: StepMsg<Value>) {
         let payload = match value_to_bytes(&step_msg.msg) {
             Ok(payload) => payload,
@@ -129,38 +132,25 @@ impl BaseStep for TcpClientStep {
 }
 
 impl StepManifestProvider for TcpClientStep {
+    /// 返回 TCP 客户端步骤元数据。
     fn manifest() -> StepManifest {
         StepManifest {
-            r#type: "TcpClientStep",
+            r#type: "TcpClientStep".into(),
             data: StepManifestData {
-                name: "TCP 客户端",
+                name: "TCP 客户端".into(),
                 description:
-                    "主动连接远端 TCP 服务，读取上级消息并写入连接，读到返回数据后向上级发布",
+                    "主动连接远端 TCP 服务，读取上级消息并写入连接，读到返回数据后向上级发布".into(),
                 columns: vec![
-                    serde_json::json!({
-                        "title": "结束符(HEX)",
-                        "dataIndex": "end_flag",
-                        "valueType": "text",
-                        "initialValue": null
-                    }),
-                    serde_json::json!({
-                        "title": "服务IP地址",
-                        "dataIndex": "host",
-                        "valueType": "text",
-                        "initialValue": "127.0.0.1"
-                    }),
-                    serde_json::json!({
-                        "title": "服务端口",
-                        "dataIndex": "port",
-                        "valueType": "digit",
-                        "initialValue": 502
-                    }),
+                    serde_json::json!({ "title": "结束符(HEX)", "dataIndex": "end_flag", "valueType": "text", "initialValue": null }),
+                    serde_json::json!({ "title": "服务IP地址", "dataIndex": "host", "valueType": "text", "initialValue": "127.0.0.1" }),
+                    serde_json::json!({ "title": "服务端口", "dataIndex": "port", "valueType": "digit", "initialValue": 502 }),
                 ],
             },
         }
     }
 }
 impl Drop for TcpClientStep {
+    /// 释放 TCP 客户端后台任务。
     fn drop(&mut self) {
         self.running.store(false, Ordering::Relaxed);
 

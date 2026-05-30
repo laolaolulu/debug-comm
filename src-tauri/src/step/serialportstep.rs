@@ -4,28 +4,13 @@ use crate::step::model::{
     WorkflowNode,
 };
 use crate::step::workflow::Workflow;
-use serde_json::Value;
+use serde_json::{Map, Value};
+use serialport::available_ports;
 use std::io::{ErrorKind, Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::async_runtime::{self, JoinHandle};
-
-fn default_data_bits() -> u8 {
-    8
-}
-
-fn default_stop_bits() -> u8 {
-    1
-}
-
-fn default_parity() -> String {
-    "none".to_string()
-}
-
-fn default_flow_control() -> String {
-    "none".to_string()
-}
 
 pub struct SerialPortStep {
     context: BaseStepContext,
@@ -35,6 +20,7 @@ pub struct SerialPortStep {
 }
 
 impl SerialPortStep {
+    /// 创建串口步骤，打开串口并启动后台读取任务。
     pub fn new(node: &WorkflowNode, workflow: Arc<Workflow>) -> Result<Arc<Self>, String> {
         let context = BaseStepContext::new(node, Arc::clone(&workflow));
         let end_flag =
@@ -111,6 +97,7 @@ impl SerialPortStep {
         Ok(step)
     }
 
+    /// 将配置中的数据位数转换为 serialport 枚举。
     fn parse_data_bits(value: u8) -> Result<serialport::DataBits, String> {
         match value {
             5 => Ok(serialport::DataBits::Five),
@@ -121,6 +108,7 @@ impl SerialPortStep {
         }
     }
 
+    /// 将配置中的停止位转换为 serialport 枚举。
     fn parse_stop_bits(value: u8) -> Result<serialport::StopBits, String> {
         match value {
             1 => Ok(serialport::StopBits::One),
@@ -129,6 +117,7 @@ impl SerialPortStep {
         }
     }
 
+    /// 将配置中的校验位转换为 serialport 枚举。
     fn parse_parity(value: &str) -> Result<serialport::Parity, String> {
         match value.to_lowercase().as_str() {
             "none" | "no" => Ok(serialport::Parity::None),
@@ -138,6 +127,7 @@ impl SerialPortStep {
         }
     }
 
+    /// 将配置中的流控方式转换为 serialport 枚举。
     fn parse_flow_control(value: &str) -> Result<serialport::FlowControl, String> {
         match value.to_lowercase().as_str() {
             "none" | "no" => Ok(serialport::FlowControl::None),
@@ -149,6 +139,7 @@ impl SerialPortStep {
 }
 
 impl BaseStep for SerialPortStep {
+    /// 接收上级下发消息并写入串口。
     fn read_up(&self, step_msg: StepMsg<Value>) {
         let payload = match value_to_bytes(&step_msg.msg) {
             Ok(payload) => payload,
@@ -169,48 +160,35 @@ impl BaseStep for SerialPortStep {
 }
 
 impl StepManifestProvider for SerialPortStep {
+    /// 返回串口通信步骤元数据。
     fn manifest() -> StepManifest {
+        let mut port_options = Map::new();
+        for port in available_ports().unwrap_or_default() {
+            let port_name = port.port_name;
+            port_options.insert(port_name.clone(), serde_json::json!({ "text": port_name }));
+        }
+        let default_port = port_options
+            .keys()
+            .next()
+            .cloned()
+            .unwrap_or_else(|| "COM1".to_string());
+
         StepManifest {
-            r#type: "SerialPortStep",
+            r#type: "SerialPortStep".into(),
             data: StepManifestData {
-                name: "串口通信",
-                description: "读取上级消息并写入串口，串口收到数据后再向上级发布消息",
+                name: "串口通信".into(),
+                description: "读取上级消息并写入串口，串口收到数据后再向上级发布消息".into(),
                 columns: vec![
-                    serde_json::json!({
-                        "title": "结束符(HEX)",
-                        "dataIndex": "end_flag",
-                        "valueType": "text",
-                        "initialValue": null
-                    }),
-                    serde_json::json!({
-                        "title": "串口号",
-                        "dataIndex": "port_name",
-                        "valueType": "text",
-                        "initialValue": "COM1"
-                    }),
-                    serde_json::json!({
-                        "title": "波特率",
-                        "dataIndex": "baud_rate",
-                        "valueType": "digit",
-                        "initialValue": 9600
-                    }),
-                    serde_json::json!({
-                        "title": "数据位",
-                        "dataIndex": "data_bits",
-                        "valueType": "digit",
-                        "initialValue": default_data_bits()
-                    }),
-                    serde_json::json!({
-                        "title": "停止位",
-                        "dataIndex": "stop_bits",
-                        "valueType": "digit",
-                        "initialValue": default_stop_bits()
-                    }),
+                    serde_json::json!({ "title": "结束符(HEX)", "dataIndex": "end_flag", "valueType": "text", "initialValue": null }),
+                    serde_json::json!({ "title": "串口号", "dataIndex": "port_name", "valueType": "select", "initialValue": default_port, "valueEnum": port_options }),
+                    serde_json::json!({ "title": "波特率", "dataIndex": "baud_rate", "valueType": "digit", "initialValue": 9600 }),
+                    serde_json::json!({ "title": "数据位", "dataIndex": "data_bits", "valueType": "digit", "initialValue": 8 }),
+                    serde_json::json!({ "title": "停止位", "dataIndex": "stop_bits", "valueType": "digit", "initialValue": 1 }),
                     serde_json::json!({
                         "title": "校验位",
                         "dataIndex": "parity",
                         "valueType": "select",
-                        "initialValue": default_parity(),
+                        "initialValue": "none".to_string(),
                         "valueEnum": {
                             "none": { "text": "None" },
                             "odd": { "text": "Odd" },
@@ -221,7 +199,7 @@ impl StepManifestProvider for SerialPortStep {
                         "title": "控制流",
                         "dataIndex": "flow_control",
                         "valueType": "select",
-                        "initialValue": default_flow_control(),
+                        "initialValue": "none".to_string(),
                         "valueEnum": {
                             "none": { "text": "None" },
                             "software": { "text": "Software" },
@@ -233,7 +211,9 @@ impl StepManifestProvider for SerialPortStep {
         }
     }
 }
+
 impl Drop for SerialPortStep {
+    /// 释放串口后台读取任务。
     fn drop(&mut self) {
         self.running.store(false, Ordering::Relaxed);
 

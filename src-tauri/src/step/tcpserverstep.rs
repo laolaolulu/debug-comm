@@ -14,6 +14,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 
+/// 返回 TCP 服务端默认单次读取字节数。
 fn default_max_read_bytes() -> usize {
     1024
 }
@@ -30,6 +31,7 @@ pub struct TcpServerStep {
 }
 
 impl TcpServerStep {
+    /// 创建 TCP 服务端步骤并启动客户端监听任务。
     pub fn new(node: &WorkflowNode, workflow: Arc<Workflow>) -> Result<Arc<Self>, String> {
         let context = BaseStepContext::new(node, Arc::clone(&workflow));
         let end_flag =
@@ -138,6 +140,7 @@ impl TcpServerStep {
         Ok(step)
     }
 
+    /// 按结束符拆包并向上级步骤发布接收到的数据。
     fn publish_received(
         context: &BaseStepContext,
         packet_buffer: &mut Vec<u8>,
@@ -160,6 +163,7 @@ impl TcpServerStep {
 }
 
 impl BaseStep for TcpServerStep {
+    /// 接收上级下发消息并广播给所有 TCP 客户端。
     fn read_up(&self, step_msg: StepMsg<Value>) {
         let payload = match value_to_bytes(&step_msg.msg) {
             Ok(payload) => payload,
@@ -181,38 +185,26 @@ impl BaseStep for TcpServerStep {
 }
 
 impl StepManifestProvider for TcpServerStep {
+    /// 返回 TCP 服务端步骤元数据。
     fn manifest() -> StepManifest {
         StepManifest {
-            r#type: "TcpServerStep",
+            r#type: "TcpServerStep".into(),
             data: StepManifestData {
-                name: "TCP 服务端",
+                name: "TCP 服务端".into(),
                 description:
-                    "监听本地 TCP 端口，接收客户端数据并发布上行消息，读取下行消息后广播写回客户端",
+                    "监听本地 TCP 端口，接收客户端数据并发布上行消息，读取下行消息后广播写回客户端"
+                        .into(),
                 columns: vec![
-                    serde_json::json!({
-                        "title": "结束符(HEX)",
-                        "dataIndex": "end_flag",
-                        "valueType": "text",
-                        "initialValue": null
-                    }),
-                    serde_json::json!({
-                        "title": "监听IP地址",
-                        "dataIndex": "bind_addr",
-                        "valueType": "text",
-                        "initialValue": "0.0.0.0"
-                    }),
-                    serde_json::json!({
-                        "title": "监听端口",
-                        "dataIndex": "port",
-                        "valueType": "digit",
-                        "initialValue": 502
-                    }),
+                    serde_json::json!({ "title": "结束符(HEX)", "dataIndex": "end_flag", "valueType": "text", "initialValue": null }),
+                    serde_json::json!({ "title": "监听IP地址", "dataIndex": "bind_addr", "valueType": "text", "initialValue": "0.0.0.0" }),
+                    serde_json::json!({ "title": "监听端口", "dataIndex": "port", "valueType": "digit", "initialValue": 502 }),
                 ],
             },
         }
     }
 }
 impl Drop for TcpServerStep {
+    /// 释放监听任务和所有客户端读写任务。
     fn drop(&mut self) {
         self.running.store(false, Ordering::Relaxed);
 

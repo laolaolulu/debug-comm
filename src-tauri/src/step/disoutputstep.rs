@@ -34,7 +34,7 @@ impl DisOutputStep {
     ) -> Result<Arc<Self>, String> {
         Ok(Arc::new(Self {
             id: node.id.clone(),
-            workflow_id: workflow.id().to_string(),
+            workflow_id: workflow.workflow.id.clone(),
             app,
         }))
     }
@@ -61,10 +61,10 @@ impl StepManifestProvider for DisOutputStep {
     /// 返回接收数据窗口步骤元数据。
     fn manifest() -> StepManifest {
         StepManifest {
-            r#type: "DisOutputStep",
+            r#type: "DisOutputStep".into(),
             data: StepManifestData {
-                name: "接收数据窗口",
-                description: "读取下级消息并推送给前端显示",
+                name: "接收数据窗口".into(),
+                description: "读取下级消息并推送给前端显示".into(),
                 columns: vec![],
             },
         }
