@@ -1,6 +1,5 @@
 pub mod step;
 
-#[cfg(not(target_os = "android"))]
 use serialport::available_ports;
 
 use step::model::{StepManifest, WorkflowDefinition};
@@ -68,19 +67,11 @@ fn get_step_manifests() -> Vec<StepManifest> {
 /// 前端可用于串口步骤的下拉选择，同时仍允许用户手动输入。
 #[tauri::command]
 fn get_serial_ports() -> Result<Vec<String>, String> {
-    #[cfg(not(target_os = "android"))]
-    {
-        available_ports()
-            .map(|ports| ports.into_iter().map(|port| port.port_name).collect())
-            .map_err(|err| err.to_string())
-    }
-    #[cfg(target_os = "android")]
-    {
-        Ok(vec![])
-    }
+    available_ports()
+        .map(|ports| ports.into_iter().map(|port| port.port_name).collect())
+        .map_err(|err| err.to_string())
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
 /// 启动 Tauri 应用并注册后端命令。
 pub fn run() {
     tauri::Builder::default()

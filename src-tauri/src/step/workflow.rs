@@ -3,7 +3,6 @@ use crate::step::disinputstep::DisInputStep;
 use crate::step::disoutputstep::DisOutputStep;
 use crate::step::model::WorkflowNode;
 use crate::step::model::{MsgType, StepManifest, StepMsg, WorkflowDefinition, WorkflowEdge};
-#[cfg(not(target_os = "android"))]
 use crate::step::serialportstep::SerialPortStep;
 use crate::step::tcpclientstep::TcpClientStep;
 use crate::step::tcpserverstep::TcpServerStep;
@@ -47,7 +46,6 @@ impl Workflow {
             TcpClientStep::manifest(),
             TcpServerStep::manifest(),
         ];
-        #[cfg(not(target_os = "android"))]
         steps.push(SerialPortStep::manifest());
         steps
     }
@@ -204,15 +202,8 @@ impl Workflow {
                 Ok(step)
             }
             "serialportstep" => {
-                #[cfg(not(target_os = "android"))]
-                {
-                    let step: Arc<dyn BaseStep> = SerialPortStep::new(node, Arc::clone(self))?;
-                    Ok(step)
-                }
-                #[cfg(target_os = "android")]
-                {
-                    Err("serialportstep is not available on Android".to_string())
-                }
+                let step: Arc<dyn BaseStep> = SerialPortStep::new(node, Arc::clone(self))?;
+                Ok(step)
             }
             "tcpclientstep" => {
                 let step: Arc<dyn BaseStep> = TcpClientStep::new(node, Arc::clone(self))?;
