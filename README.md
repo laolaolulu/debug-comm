@@ -36,7 +36,7 @@ debug-comm 以可视化工作流的方式组织通信链路，支持串口、TCP
 ## 基础通信测试演示
 
 
- <video src="wwwroot/assets/基础通信测试.mp4" controls  width="100%" preload="metadata" poster="wwwroot/assets/poster.jpg"></video>
+ <video src="wwwroot/assets/communication-demo.mp4" controls  width="100%" preload="metadata" poster="wwwroot/assets/poster.jpg"></video>
 
 ## 节点类型
 
