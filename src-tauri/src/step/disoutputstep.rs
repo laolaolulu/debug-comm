@@ -1,19 +1,11 @@
 use crate::step::basestep::{BaseStep, StepManifestProvider};
 use crate::step::model::{StepManifest, StepManifestData, StepMsg, WorkflowNode};
 use crate::step::workflow::Workflow;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::Value;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};
-
-/// 接收数据窗口步骤节点 data 结构。
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DisOutputStepData {
-    pub name: String,
-    #[serde(default)]
-    pub description: String,
-}
 
 #[derive(Debug, Clone, Serialize)]
 struct WorkflowStepMessagePayload {
@@ -40,10 +32,6 @@ impl DisOutputStep {
         workflow: Arc<Workflow>,
         app: Option<AppHandle>,
     ) -> Result<Arc<Self>, String> {
-        node.data
-            .parse::<DisOutputStepData>()
-            .map_err(|err| format!("disoutputstep[{}] invalid data: {err}", node.id))?;
-
         Ok(Arc::new(Self {
             id: node.id.clone(),
             workflow_id: workflow.id().to_string(),

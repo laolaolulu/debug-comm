@@ -104,7 +104,7 @@ disinputstep -> serialportstep -> disoutputstep
 
 - 从 `columns` 中递归读取 `dataIndex` 和 `initialValue`。
 - 合并节点 data 中的扩展字段。
-- 最后反序列化为具体步骤的 data 结构，例如 `SerialPortStepData`。
+- 步骤通过 `BaseStepContext` 直接读取节点参数。
 
 ## 文件说明
 
@@ -215,7 +215,7 @@ step 模块入口文件，声明并导出当前目录下的各个子模块：
 
 执行逻辑：
 
-1. `SerialPortStep::new` 解析节点 data 为 `SerialPortStepData`。
+1. `SerialPortStep::new` 从 `BaseStepContext` 读取串口参数。
 2. 使用 `serialport::new(port_name, baud_rate)` 打开串口。
 3. clone 串口句柄，分别用于读和写。
 4. `read_up` 收到下行消息时，将 `StepMsg.msg` 转换为 `Vec<u8>`，写入串口并 `flush`。
@@ -315,7 +315,7 @@ TCP 服务端步骤。
 3. 定义步骤结构体，组合 `BaseStepContext`。
 4. 实现 `new(node, workflow)`：
    - 创建 `BaseStepContext`。
-   - 调用 `node.data.parse::<XxxStepData>()` 解析参数。
+   - 通过 `BaseStepContext` 读取节点参数。
    - 初始化连接、设备、缓存等资源。
    - 按需启动设备或网络读取任务。
 5. 实现 `BaseStep`，按方向重写 `read_up` 或 `read_down`。

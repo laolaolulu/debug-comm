@@ -4,7 +4,6 @@ use crate::step::model::{
     WorkflowNode,
 };
 use crate::step::workflow::Workflow;
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -14,18 +13,6 @@ use tokio::net::tcp::OwnedWriteHalf;
 use tokio::net::TcpStream;
 use tokio::sync::Mutex as AsyncMutex;
 
-/// TCP 客户端步骤节点 data。
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TcpClientStepData {
-    pub name: String,
-    #[serde(default)]
-    pub description: String,
-    #[serde(default)]
-    pub end_flag: Option<String>,
-    pub host: String,
-    pub port: u16,
-}
-
 pub struct TcpClientStep {
     context: BaseStepContext,
     running: Arc<AtomicBool>,
@@ -34,15 +21,15 @@ pub struct TcpClientStep {
 }
 
 impl TcpClientStep {
-    /// 创建并启动 TCP 客户端步骤。
     pub fn new(node: &WorkflowNode, workflow: Arc<Workflow>) -> Result<Arc<Self>, String> {
-        let context = BaseStepContext::new(&node.id, Arc::clone(&workflow));
-        let data = node
-            .data
-            .parse::<TcpClientStepData>()
-            .map_err(|err| format!("tcpclientstep[{}] invalid data: {err}", context.id()))?;
-        let end_flag = parse_hex_end_flag(data.end_flag.as_deref())
-            .map_err(|err| format!("tcpclientstep[{}] invalid end_flag: {err}", context.id()))?;
+        let context = BaseStepContext::new(node, Arc::clone(&workflow));
+        let end_flag =
+            parse_hex_end_flag(context.get_optional_data::<String>("end_flag")?.as_deref())
+                .map_err(|err| {
+                    format!("tcpclientstep[{}] invalid end_flag: {err}", context.id())
+                })?;
+        let host = context.get_data::<String>("host")?;
+        let port = context.get_data::<u16>("port")?;
 
         let step = Arc::new(Self {
             context,
@@ -51,7 +38,7 @@ impl TcpClientStep {
             task: Mutex::new(None),
         });
 
-        let address = format!("{}:{}", data.host, data.port);
+        let address = format!("{host}:{port}");
         let running = Arc::clone(&step.running);
         let context_for_task = step.context.clone();
         let writer_for_task = Arc::clone(&step.writer);
@@ -94,7 +81,6 @@ impl TcpClientStep {
         Ok(step)
     }
 
-    /// 按结束符配置发布原始读取数据或完整数据包。
     fn publish_received(
         context: &BaseStepContext,
         packet_buffer: &mut Vec<u8>,
@@ -117,7 +103,6 @@ impl TcpClientStep {
 }
 
 impl BaseStep for TcpClientStep {
-    /// 接收上级下行消息并写入 TCP 连接。
     fn read_up(&self, step_msg: StepMsg<Value>) {
         let payload = match value_to_bytes(&step_msg.msg) {
             Ok(payload) => payload,
@@ -144,7 +129,6 @@ impl BaseStep for TcpClientStep {
 }
 
 impl StepManifestProvider for TcpClientStep {
-    /// 返回 TCP 客户端步骤元数据。
     fn manifest() -> StepManifest {
         StepManifest {
             r#type: "TcpClientStep",
@@ -176,9 +160,7 @@ impl StepManifestProvider for TcpClientStep {
         }
     }
 }
-
 impl Drop for TcpClientStep {
-    /// 停止 TCP 客户端后台任务。
     fn drop(&mut self) {
         self.running.store(false, Ordering::Relaxed);
 

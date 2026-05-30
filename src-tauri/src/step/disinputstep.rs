@@ -1,17 +1,10 @@
 use crate::step::basestep::{BaseStep, BaseStepContext, StepManifestProvider};
 use crate::step::model::{value_to_bytes, StepManifest, StepManifestData, WorkflowNode};
 use crate::step::workflow::Workflow;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::Value;
 use std::sync::Arc;
 use tauri::{AppHandle, EventId, Listener};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DisInputStepData {
-    pub name: String,
-    #[serde(default)]
-    pub description: String,
-}
 
 #[derive(Debug, Deserialize)]
 struct DisInputStepPayload {
@@ -32,11 +25,7 @@ impl DisInputStep {
         workflow: Arc<Workflow>,
         app: Option<AppHandle>,
     ) -> Result<Arc<Self>, String> {
-        node.data
-            .parse::<DisInputStepData>()
-            .map_err(|err| format!("disinputstep[{}] invalid data: {err}", node.id))?;
-
-        let context = BaseStepContext::new(&node.id, workflow);
+        let context = BaseStepContext::new(node, workflow);
         let event_id = app.as_ref().map(|app| {
             let context = context.clone();
             let step_id = node.id.clone();

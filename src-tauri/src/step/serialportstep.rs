@@ -4,7 +4,6 @@ use crate::step::model::{
     WorkflowNode,
 };
 use crate::step::workflow::Workflow;
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::io::{ErrorKind, Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -12,42 +11,18 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::async_runtime::{self, JoinHandle};
 
-/// 串口步骤节点 data 结构。
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SerialPortStepData {
-    pub name: String,
-    #[serde(default)]
-    pub description: String,
-    #[serde(default)]
-    pub end_flag: Option<String>,
-    pub port_name: String,
-    pub baud_rate: u32,
-    #[serde(default = "default_data_bits")]
-    pub data_bits: u8,
-    #[serde(default = "default_stop_bits")]
-    pub stop_bits: u8,
-    #[serde(default = "default_parity")]
-    pub parity: String,
-    #[serde(default = "default_flow_control")]
-    pub flow_control: String,
-}
-
-/// 返回默认数据位。
 fn default_data_bits() -> u8 {
     8
 }
 
-/// 返回默认停止位。
 fn default_stop_bits() -> u8 {
     1
 }
 
-/// 返回默认校验位。
 fn default_parity() -> String {
     "none".to_string()
 }
 
-/// 返回默认流控方式。
 fn default_flow_control() -> String {
     "none".to_string()
 }
@@ -60,27 +35,31 @@ pub struct SerialPortStep {
 }
 
 impl SerialPortStep {
-    /// 创建并启动串口步骤。
     pub fn new(node: &WorkflowNode, workflow: Arc<Workflow>) -> Result<Arc<Self>, String> {
-        let context = BaseStepContext::new(&node.id, Arc::clone(&workflow));
-        let data = node
-            .data
-            .parse::<SerialPortStepData>()
-            .map_err(|err| format!("serialportstep[{}] invalid data: {err}", context.id()))?;
-        let end_flag = parse_hex_end_flag(data.end_flag.as_deref())
-            .map_err(|err| format!("serialportstep[{}] invalid end_flag: {err}", context.id()))?;
+        let context = BaseStepContext::new(node, Arc::clone(&workflow));
+        let end_flag =
+            parse_hex_end_flag(context.get_optional_data::<String>("end_flag")?.as_deref())
+                .map_err(|err| {
+                    format!("serialportstep[{}] invalid end_flag: {err}", context.id())
+                })?;
+        let port_name = context.get_data::<String>("port_name")?;
+        let baud_rate = context.get_data::<u32>("baud_rate")?;
+        let data_bits = context.get_data::<u8>("data_bits")?;
+        let stop_bits = context.get_data::<u8>("stop_bits")?;
+        let parity = context.get_data::<String>("parity")?;
+        let flow_control = context.get_data::<String>("flow_control")?;
 
-        let writer = serialport::new(&data.port_name, data.baud_rate)
-            .data_bits(Self::parse_data_bits(data.data_bits)?)
-            .stop_bits(Self::parse_stop_bits(data.stop_bits)?)
-            .parity(Self::parse_parity(&data.parity)?)
-            .flow_control(Self::parse_flow_control(&data.flow_control)?)
+        let writer = serialport::new(&port_name, baud_rate)
+            .data_bits(Self::parse_data_bits(data_bits)?)
+            .stop_bits(Self::parse_stop_bits(stop_bits)?)
+            .parity(Self::parse_parity(&parity)?)
+            .flow_control(Self::parse_flow_control(&flow_control)?)
             .timeout(Duration::from_millis(100))
             .open()
-            .map_err(|err| format!("open serial port {} failed: {err}", data.port_name))?;
+            .map_err(|err| format!("open serial port {port_name} failed: {err}"))?;
         let mut reader = writer
             .try_clone()
-            .map_err(|err| format!("clone serial port {} failed: {err}", data.port_name))?;
+            .map_err(|err| format!("clone serial port {port_name} failed: {err}"))?;
         let writer = Arc::new(Mutex::new(writer));
 
         let step = Arc::new(Self {
@@ -132,7 +111,6 @@ impl SerialPortStep {
         Ok(step)
     }
 
-    /// 将前端配置的数据位转换为 serialport 枚举。
     fn parse_data_bits(value: u8) -> Result<serialport::DataBits, String> {
         match value {
             5 => Ok(serialport::DataBits::Five),
@@ -143,7 +121,6 @@ impl SerialPortStep {
         }
     }
 
-    /// 将前端配置的停止位转换为 serialport 枚举。
     fn parse_stop_bits(value: u8) -> Result<serialport::StopBits, String> {
         match value {
             1 => Ok(serialport::StopBits::One),
@@ -152,7 +129,6 @@ impl SerialPortStep {
         }
     }
 
-    /// 将前端配置的校验位转换为 serialport 枚举。
     fn parse_parity(value: &str) -> Result<serialport::Parity, String> {
         match value.to_lowercase().as_str() {
             "none" | "no" => Ok(serialport::Parity::None),
@@ -162,7 +138,6 @@ impl SerialPortStep {
         }
     }
 
-    /// 将前端配置的流控方式转换为 serialport 枚举。
     fn parse_flow_control(value: &str) -> Result<serialport::FlowControl, String> {
         match value.to_lowercase().as_str() {
             "none" | "no" => Ok(serialport::FlowControl::None),
@@ -174,7 +149,6 @@ impl SerialPortStep {
 }
 
 impl BaseStep for SerialPortStep {
-    /// 接收上级下行消息并写入串口。
     fn read_up(&self, step_msg: StepMsg<Value>) {
         let payload = match value_to_bytes(&step_msg.msg) {
             Ok(payload) => payload,
@@ -195,7 +169,6 @@ impl BaseStep for SerialPortStep {
 }
 
 impl StepManifestProvider for SerialPortStep {
-    /// 返回串口通信步骤元数据。
     fn manifest() -> StepManifest {
         StepManifest {
             r#type: "SerialPortStep",
@@ -260,9 +233,7 @@ impl StepManifestProvider for SerialPortStep {
         }
     }
 }
-
 impl Drop for SerialPortStep {
-    /// 停止串口读取任务。
     fn drop(&mut self) {
         self.running.store(false, Ordering::Relaxed);
 

@@ -140,9 +140,9 @@ impl Workflow {
     }
 
     /// 将当前工作流重新序列化为 JSON 字符串。
-    pub fn to_json(&self) -> serde_json::Result<String> {
-        serde_json::to_string(self.definition.as_ref())
-    }
+    // pub fn to_json(&self) -> serde_json::Result<String> {
+    //     serde_json::to_string(self.definition.as_ref())
+    // }
 
     /// 按 id 从全局实例集合中查找工作流。
     /// 如果集合中不存在该工作流，这里会返回 None。

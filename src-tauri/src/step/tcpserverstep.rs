@@ -4,7 +4,6 @@ use crate::step::model::{
     WorkflowNode,
 };
 use crate::step::workflow::Workflow;
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::net::TcpListener as StdTcpListener;
@@ -15,21 +14,6 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 
-/// TCP 服务端步骤节点 data。
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TcpServerStepData {
-    pub name: String,
-    #[serde(default)]
-    pub description: String,
-    pub bind_addr: String,
-    pub port: u16,
-    #[serde(default)]
-    pub end_flag: Option<String>,
-    #[serde(default = "default_max_read_bytes")]
-    pub max_read_bytes: usize,
-}
-
-/// 返回默认单次读取字节数。
 fn default_max_read_bytes() -> usize {
     1024
 }
@@ -46,17 +30,20 @@ pub struct TcpServerStep {
 }
 
 impl TcpServerStep {
-    /// 创建并启动 TCP 服务端步骤。
     pub fn new(node: &WorkflowNode, workflow: Arc<Workflow>) -> Result<Arc<Self>, String> {
-        let context = BaseStepContext::new(&node.id, Arc::clone(&workflow));
-        let data = node
-            .data
-            .parse::<TcpServerStepData>()
-            .map_err(|err| format!("tcpserverstep[{}] invalid data: {err}", context.id()))?;
-        let end_flag = parse_hex_end_flag(data.end_flag.as_deref())
-            .map_err(|err| format!("tcpserverstep[{}] invalid end_flag: {err}", context.id()))?;
+        let context = BaseStepContext::new(node, Arc::clone(&workflow));
+        let end_flag =
+            parse_hex_end_flag(context.get_optional_data::<String>("end_flag")?.as_deref())
+                .map_err(|err| {
+                    format!("tcpserverstep[{}] invalid end_flag: {err}", context.id())
+                })?;
+        let bind_addr = context.get_data::<String>("bind_addr")?;
+        let port = context.get_data::<u16>("port")?;
+        let max_read_bytes = context
+            .get_data::<usize>("max_read_bytes")
+            .unwrap_or_else(|_| default_max_read_bytes());
 
-        let address = format!("{}:{}", data.bind_addr, data.port);
+        let address = format!("{bind_addr}:{port}");
         let std_listener = StdTcpListener::bind(&address)
             .map_err(|err| format!("bind {address} failed: {err}"))?;
         std_listener
@@ -78,7 +65,7 @@ impl TcpServerStep {
         let context_for_accept = step.context.clone();
         let running_for_accept = Arc::clone(&step.running);
         let clients_for_accept = Arc::clone(&clients);
-        let max_read_bytes = data.max_read_bytes.max(1);
+        let max_read_bytes = max_read_bytes.max(1);
         let accept_task = async_runtime::spawn(async move {
             let mut next_client_id = 1_usize;
 
@@ -151,7 +138,6 @@ impl TcpServerStep {
         Ok(step)
     }
 
-    /// 按结束符配置发布原始读取数据或完整数据包。
     fn publish_received(
         context: &BaseStepContext,
         packet_buffer: &mut Vec<u8>,
@@ -174,7 +160,6 @@ impl TcpServerStep {
 }
 
 impl BaseStep for TcpServerStep {
-    /// 接收上级下行消息并广播给所有客户端。
     fn read_up(&self, step_msg: StepMsg<Value>) {
         let payload = match value_to_bytes(&step_msg.msg) {
             Ok(payload) => payload,
@@ -196,7 +181,6 @@ impl BaseStep for TcpServerStep {
 }
 
 impl StepManifestProvider for TcpServerStep {
-    /// 返回 TCP 服务端步骤元数据。
     fn manifest() -> StepManifest {
         StepManifest {
             r#type: "TcpServerStep",
@@ -228,9 +212,7 @@ impl StepManifestProvider for TcpServerStep {
         }
     }
 }
-
 impl Drop for TcpServerStep {
-    /// 停止监听任务和客户端任务。
     fn drop(&mut self) {
         self.running.store(false, Ordering::Relaxed);
 
