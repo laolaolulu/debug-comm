@@ -106,6 +106,7 @@ export default () => {
       </Flex>
       <Divider size='small' />
       <Flex
+        className='step-list-content'
         gap={10}
         vertical
         style={{
