@@ -48,6 +48,7 @@ impl BaseStepContext {
         self.node
             .data
             .value(key)
+            .filter(|value| !value.is_null())
             .map(|value| {
                 serde_json::from_value(value.clone())
                     .map_err(|_| format!("step {} invalid parameter: {key}", self.id()))

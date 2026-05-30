@@ -195,7 +195,7 @@ impl StepManifestProvider for TcpServerStep {
                     "监听本地 TCP 端口，接收客户端数据并发布上行消息，读取下行消息后广播写回客户端"
                         .into(),
                 columns: vec![
-                    serde_json::json!({ "title": "结束符(HEX)", "dataIndex": "end_flag", "valueType": "text", "initialValue": null }),
+                    serde_json::json!({ "title": "结束符(HEX)", "dataIndex": "end_flag", "valueType": "text", "initialValue": "" }),
                     serde_json::json!({ "title": "监听IP地址", "dataIndex": "bind_addr", "valueType": "text", "initialValue": "0.0.0.0" }),
                     serde_json::json!({ "title": "监听端口", "dataIndex": "port", "valueType": "digit", "initialValue": 502 }),
                 ],

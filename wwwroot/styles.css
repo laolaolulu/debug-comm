@@ -400,6 +400,22 @@ a {
   gap: 18px;
 }
 
+.demo-video-wrap {
+  max-width: 960px;
+  margin: 0 auto;
+  border: 1px solid rgba(202, 224, 220, 0.9);
+  border-radius: 24px;
+  overflow: hidden;
+  background: #0b1f2b;
+  box-shadow: var(--shadow);
+}
+
+.demo-video {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
 .feature-card,
 .download-card,
 .faq-list details {
@@ -429,6 +445,94 @@ a {
 .download-card h3 {
   margin: 18px 0 10px;
   font-size: 20px;
+}
+
+/* ---- info tables ---- */
+.table-wrap {
+  max-width: 860px;
+  margin: 0 auto;
+  overflow-x: auto;
+}
+
+.info-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 18px 44px rgba(27, 54, 50, 0.06);
+}
+
+.info-table th,
+.info-table td {
+  padding: 14px 20px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  font-size: 15px;
+}
+
+.info-table thead th {
+  background: #f0f8f6;
+  color: #087263;
+  font-weight: 800;
+  font-size: 14px;
+}
+
+.info-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.info-table tbody tr:hover {
+  background: #f6fbf9;
+}
+
+/* ---- roadmap ---- */
+.roadmap-list {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+}
+
+.roadmap-list li {
+  position: relative;
+  padding: 12px 0 12px 36px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.roadmap-list li:last-child {
+  border-bottom: none;
+}
+
+.roadmap-list li::before {
+  position: absolute;
+  left: 0;
+  top: 14px;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  background: #ffffff;
+  content: "";
+}
+
+.roadmap-list li.done {
+  color: var(--text);
+}
+
+.roadmap-list li.done::before {
+  border-color: var(--green);
+  background: var(--green);
+  content: "✓";
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 20px;
+  text-align: center;
 }
 
 .feature-card p,
@@ -652,6 +756,12 @@ a {
   .hero-stats,
   .feature-grid {
     grid-template-columns: 1fr;
+  }
+
+  .info-table th,
+  .info-table td {
+    padding: 10px 14px;
+    font-size: 14px;
   }
 
   .hero-visual {

@@ -141,7 +141,7 @@ impl StepManifestProvider for TcpClientStep {
                 description:
                     "主动连接远端 TCP 服务，读取上级消息并写入连接，读到返回数据后向上级发布".into(),
                 columns: vec![
-                    serde_json::json!({ "title": "结束符(HEX)", "dataIndex": "end_flag", "valueType": "text", "initialValue": null }),
+                    serde_json::json!({ "title": "结束符(HEX)", "dataIndex": "end_flag", "valueType": "text", "initialValue": "" }),
                     serde_json::json!({ "title": "服务IP地址", "dataIndex": "host", "valueType": "text", "initialValue": "127.0.0.1" }),
                     serde_json::json!({ "title": "服务端口", "dataIndex": "port", "valueType": "digit", "initialValue": 502 }),
                 ],

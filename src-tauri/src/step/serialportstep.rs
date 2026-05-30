@@ -9,7 +9,7 @@ use serialport::available_ports;
 use std::io::{ErrorKind, Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri::async_runtime::{self, JoinHandle};
 
 pub struct SerialPortStep {
@@ -60,8 +60,25 @@ impl SerialPortStep {
         let read_task = async_runtime::spawn_blocking(move || {
             let mut buffer = vec![0_u8; 1024];
             let mut packet_buffer = Vec::<u8>::new();
+            // 无结束符时，用于超时拼接的缓冲区和时间戳
+            let mut raw_buffer = Vec::<u8>::new();
+            let mut last_receive_time: Option<Instant> = None;
+            let coalesce_timeout = Duration::from_millis(50);
 
             while running_for_read.load(Ordering::Relaxed) {
+                // 无结束符模式：检查是否应发送累积的数据
+                if end_flag.is_none() {
+                    if let Some(last_time) = last_receive_time {
+                        if last_time.elapsed() >= coalesce_timeout && !raw_buffer.is_empty() {
+                            let payload = raw_buffer.split_off(0);
+                            last_receive_time = None;
+                            if context_for_read.write_up(payload).is_err() {
+                                return;
+                            }
+                        }
+                    }
+                }
+
                 match reader.read(&mut buffer) {
                     Ok(size) if size > 0 => {
                         let received = &buffer[..size];
@@ -77,10 +94,8 @@ impl SerialPortStep {
                                 }
                             }
                         } else {
-                            let payload = received.to_vec();
-                            if context_for_read.write_up(payload).is_err() {
-                                return;
-                            }
+                            raw_buffer.extend_from_slice(received);
+                            last_receive_time = Some(Instant::now());
                         }
                     }
                     Ok(_) => continue,
@@ -179,7 +194,7 @@ impl StepManifestProvider for SerialPortStep {
                 name: "串口通信".into(),
                 description: "读取上级消息并写入串口，串口收到数据后再向上级发布消息".into(),
                 columns: vec![
-                    serde_json::json!({ "title": "结束符(HEX)", "dataIndex": "end_flag", "valueType": "text", "initialValue": null }),
+                    serde_json::json!({ "title": "结束符(HEX)", "dataIndex": "end_flag", "valueType": "text", "initialValue": "" }),
                     serde_json::json!({ "title": "串口号", "dataIndex": "port_name", "valueType": "select", "initialValue": default_port, "valueEnum": port_options }),
                     serde_json::json!({ "title": "波特率", "dataIndex": "baud_rate", "valueType": "digit", "initialValue": 9600 }),
                     serde_json::json!({ "title": "数据位", "dataIndex": "data_bits", "valueType": "digit", "initialValue": 8 }),
