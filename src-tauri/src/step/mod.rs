@@ -1,6 +1,7 @@
 pub mod basestep;
 pub mod disinputstep;
 pub mod disoutputstep;
+pub mod javascriptstep;
 pub mod model;
 pub mod serialportstep;
 pub mod tcpclientstep;

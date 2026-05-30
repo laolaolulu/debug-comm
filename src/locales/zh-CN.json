@@ -15,6 +15,7 @@
   "menu.workbench": "工作台",
   "node.type.DisInputStep": "发送数据窗口",
   "node.type.DisOutputStep": "接收数据窗口",
+  "node.type.JavaScriptStep": "JS 自动化脚本",
   "node.type.SerialPortStep": "串口通信",
   "node.type.TcpClientStep": "TCP 客户端",
   "node.type.TcpServerStep": "TCP 服务端",

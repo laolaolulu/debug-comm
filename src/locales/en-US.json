@@ -15,6 +15,7 @@
   "menu.workbench": "Workbench",
   "node.type.DisInputStep": "Send Data",
   "node.type.DisOutputStep": "Receive Data",
+  "node.type.JavaScriptStep": "JS Script",
   "node.type.SerialPortStep": "Serial Port",
   "node.type.TcpClientStep": "TCP Client",
   "node.type.TcpServerStep": "TCP Server",

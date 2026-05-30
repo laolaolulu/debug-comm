@@ -1,6 +1,7 @@
 use crate::step::basestep::{BaseStep, StepManifestProvider};
 use crate::step::disinputstep::DisInputStep;
 use crate::step::disoutputstep::DisOutputStep;
+use crate::step::javascriptstep::JavaScriptStep;
 use crate::step::model::{MsgType, StepManifest, StepMsg, WorkflowDefinition, WorkflowNode};
 use crate::step::serialportstep::SerialPortStep;
 use crate::step::tcpclientstep::TcpClientStep;
@@ -35,6 +36,7 @@ impl Workflow {
             TcpClientStep::manifest(),
             TcpServerStep::manifest(),
             SerialPortStep::manifest(),
+            JavaScriptStep::manifest(),
         ]
     }
 
@@ -158,6 +160,10 @@ impl Workflow {
             }
             "tcpserverstep" => {
                 let step: Arc<dyn BaseStep> = TcpServerStep::new(node, Arc::clone(self))?;
+                Ok(step)
+            }
+            "javascriptstep" => {
+                let step: Arc<dyn BaseStep> = JavaScriptStep::new(node, Arc::clone(self))?;
                 Ok(step)
             }
             _ => Err(format!("unsupported step type: {}", node.r#type)),
