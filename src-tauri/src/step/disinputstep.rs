@@ -1,5 +1,5 @@
 use crate::step::basestep::{BaseStep, BaseStepContext, StepManifestProvider};
-use crate::step::model::{value_to_bytes, StepManifest, WorkflowNode};
+use crate::step::model::{value_to_bytes, StepManifest, StepManifestData, WorkflowNode};
 use crate::step::workflow::Workflow;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -74,10 +74,12 @@ impl StepManifestProvider for DisInputStep {
     /// 返回发送数据窗口步骤元数据。
     fn manifest() -> StepManifest {
         StepManifest {
-            r#type: "DisInputStep".to_string(),
-            name: "发送数据窗口".to_string(),
-            description: "接收前端发送事件，按 step id 向下发布消息".to_string(),
-            default_data: serde_json::json!([]),
+            r#type: "DisInputStep",
+            data: StepManifestData {
+                name: "发送数据窗口",
+                description: "接收前端发送事件，按 step id 向下发布消息",
+                columns: vec![],
+            },
         }
     }
 }

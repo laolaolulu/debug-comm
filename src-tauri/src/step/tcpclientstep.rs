@@ -1,6 +1,7 @@
 use crate::step::basestep::{BaseStep, BaseStepContext, StepManifestProvider};
 use crate::step::model::{
-    find_bytes, parse_hex_end_flag, value_to_bytes, StepManifest, StepMsg, WorkflowNode,
+    find_bytes, parse_hex_end_flag, value_to_bytes, StepManifest, StepManifestData, StepMsg,
+    WorkflowNode,
 };
 use crate::step::workflow::Workflow;
 use serde::{Deserialize, Serialize};
@@ -16,26 +17,15 @@ use tokio::sync::Mutex as AsyncMutex;
 /// TCP 客户端步骤节点 data。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TcpClientStepData {
-    /// 节点显示名称。
     pub name: String,
-    /// 节点说明。
     #[serde(default)]
     pub description: String,
-    /// 可选的 16 进制结束符，例如 0A0D。为空时读到多少就发布多少。
     #[serde(default)]
     pub end_flag: Option<String>,
-    /// 远端主机地址。
     pub host: String,
-    /// 远端端口。
     pub port: u16,
 }
 
-/// TCP 客户端步骤。
-///
-/// 运行模型：
-/// - 建立一个到远端的 TCP 连接。
-/// - 上级消息到达时写入 socket。
-/// - 从 socket 读取数据并向上级发布消息。
 pub struct TcpClientStep {
     context: BaseStepContext,
     running: Arc<AtomicBool>,
@@ -104,7 +94,7 @@ impl TcpClientStep {
         Ok(step)
     }
 
-    /// 根据是否配置结束符，发布原始读取数据或完整数据包。
+    /// 按结束符配置发布原始读取数据或完整数据包。
     fn publish_received(
         context: &BaseStepContext,
         packet_buffer: &mut Vec<u8>,
@@ -157,30 +147,32 @@ impl StepManifestProvider for TcpClientStep {
     /// 返回 TCP 客户端步骤元数据。
     fn manifest() -> StepManifest {
         StepManifest {
-            r#type: "TcpClientStep".to_string(),
-            name: "TCP 客户端".to_string(),
-            description: "主动连接远端 TCP 服务，读取上级消息并写入连接，读取返回数据后向上级发布"
-                .to_string(),
-            default_data: serde_json::json!([
-                {
-                    "title": "结束符(HEX)",
-                    "dataIndex": "end_flag",
-                    "valueType": "text",
-                    "initialValue": null
-                },
-                {
-                    "title": "服务IP地址",
-                    "dataIndex": "host",
-                    "valueType": "text",
-                    "initialValue": "127.0.0.1"
-                },
-                {
-                    "title": "服务端口",
-                    "dataIndex": "port",
-                    "valueType": "digit",
-                    "initialValue": 502
-                }
-            ]),
+            r#type: "TcpClientStep",
+            data: StepManifestData {
+                name: "TCP 客户端",
+                description:
+                    "主动连接远端 TCP 服务，读取上级消息并写入连接，读到返回数据后向上级发布",
+                columns: vec![
+                    serde_json::json!({
+                        "title": "结束符(HEX)",
+                        "dataIndex": "end_flag",
+                        "valueType": "text",
+                        "initialValue": null
+                    }),
+                    serde_json::json!({
+                        "title": "服务IP地址",
+                        "dataIndex": "host",
+                        "valueType": "text",
+                        "initialValue": "127.0.0.1"
+                    }),
+                    serde_json::json!({
+                        "title": "服务端口",
+                        "dataIndex": "port",
+                        "valueType": "digit",
+                        "initialValue": 502
+                    }),
+                ],
+            },
         }
     }
 }

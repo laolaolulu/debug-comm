@@ -1,24 +1,22 @@
-import { invoke } from "@tauri-apps/api/core";
-import { useDraggable } from "@neodrag/react";
-import { useReactFlow, XYPosition } from "@xyflow/react";
-import type { ProFormColumnsType } from "@ant-design/pro-components";
+import { invoke } from '@tauri-apps/api/core';
+import { useDraggable } from '@neodrag/react';
+import { useReactFlow, XYPosition } from '@xyflow/react';
+import type { ProFormColumnsType } from '@ant-design/pro-components';
 import {
   type RefObject,
   useCallback,
   useEffect,
   useRef,
   useState,
-} from "react";
-import { Divider, Flex, Typography } from "antd";
-import { FormattedMessage, useIntl } from "react-intl";
-import { nodeType } from "..";
-import { HolderOutlined } from "@ant-design/icons";
+} from 'react';
+import { Divider, Flex, Typography } from 'antd';
+import { FormattedMessage, useIntl } from 'react-intl';
+import { nodeType } from '..';
+import { HolderOutlined } from '@ant-design/icons';
 
 interface StepManifest {
   type: keyof typeof nodeType;
-  name: string;
-  description: string;
-  default_data: ProFormColumnsType[];
+  data: WorkflowNodeData & { columns: ProFormColumnsType[] };
 }
 
 interface DraggableNodeProps {
@@ -48,11 +46,11 @@ const DraggableNode = ({ step, onDrop }: DraggableNodeProps) => {
     },
   });
   return (
-    <div ref={draggableRef} className="listnode">
-      <span className="listnode-title">
+    <div ref={draggableRef} className='listnode'>
+      <span className='listnode-title'>
         <span>{intl.formatMessage(nodeType[step.type])}</span>
       </span>
-      <HolderOutlined style={{ color: "#666" }} />
+      <HolderOutlined style={{ color: '#666' }} />
     </div>
   );
 };
@@ -62,14 +60,14 @@ export default () => {
   const [steps, setSteps] = useState<StepManifest[]>([]);
 
   useEffect(() => {
-    invoke<StepManifest[]>("get_step_manifests")
+    invoke<StepManifest[]>('get_step_manifests')
       .then(setSteps)
       .catch(() => setSteps([]));
   }, []);
 
   const handleNodeDrop = useCallback(
     (step: StepManifest, screenPosition: XYPosition) => {
-      const flow = document.querySelector(".react-flow");
+      const flow = document.querySelector('.react-flow');
       const flowRect = flow?.getBoundingClientRect();
       if (
         flowRect &&
@@ -81,14 +79,9 @@ export default () => {
         const position = screenToFlowPosition(screenPosition);
 
         const newNode: WorkflowNode = {
+          ...step,
           id: String(Date.now()),
-          type: step.type,
           position,
-          data: {
-            name: step.name,
-            description: step.description,
-            columns: step.default_data,
-          },
         };
 
         setNodes((nds) => nds.concat(newNode));
@@ -99,28 +92,28 @@ export default () => {
 
   return (
     <Flex vertical>
-      <Flex justify="space-between" style={{ margin: "15px 15px 5px 15px" }}>
+      <Flex justify='space-between' style={{ margin: '15px 15px 5px 15px' }}>
         <Typography.Text strong>
-          <FormattedMessage id="step.list.title" defaultMessage="工作流节点" />
+          <FormattedMessage id='step.list.title' defaultMessage='工作流节点' />
         </Typography.Text>
-        <Typography.Text type="secondary">
+        <Typography.Text type='secondary'>
           <FormattedMessage
-            id="step.list.count"
-            defaultMessage="{count} 个类型"
+            id='step.list.count'
+            defaultMessage='{count} 个类型'
             values={{ count: steps.length }}
           />
         </Typography.Text>
       </Flex>
-      <Divider size="small" />
+      <Divider size='small' />
       <Flex
         gap={10}
         vertical
         style={{
-          padding: "5px 15px 10px 10px",
-          overflowX: "hidden",
-          overflowY: "auto",
-          height: "calc(100vh - 160px)",
-          scrollbarWidth: "thin",
+          padding: '5px 15px 10px 10px',
+          overflowX: 'hidden',
+          overflowY: 'auto',
+          height: 'calc(100vh - 160px)',
+          scrollbarWidth: 'thin',
         }}
       >
         {steps.map((step) => (

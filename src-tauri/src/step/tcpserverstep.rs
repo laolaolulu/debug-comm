@@ -1,6 +1,7 @@
 use crate::step::basestep::{BaseStep, BaseStepContext, StepManifestProvider};
 use crate::step::model::{
-    find_bytes, parse_hex_end_flag, value_to_bytes, StepManifest, StepMsg, WorkflowNode,
+    find_bytes, parse_hex_end_flag, value_to_bytes, StepManifest, StepManifestData, StepMsg,
+    WorkflowNode,
 };
 use crate::step::workflow::Workflow;
 use serde::{Deserialize, Serialize};
@@ -17,19 +18,13 @@ use tokio::sync::mpsc;
 /// TCP 服务端步骤节点 data。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TcpServerStepData {
-    /// 节点显示名称。
     pub name: String,
-    /// 节点说明。
     #[serde(default)]
     pub description: String,
-    /// 本地监听地址。
     pub bind_addr: String,
-    /// 本地监听端口。
     pub port: u16,
-    /// 可选的 16 进制结束符，例如 0A0D。为空时读到多少就发布多少。
     #[serde(default)]
     pub end_flag: Option<String>,
-    /// 单次读取最大字节数。
     #[serde(default = "default_max_read_bytes")]
     pub max_read_bytes: usize,
 }
@@ -42,12 +37,6 @@ fn default_max_read_bytes() -> usize {
 type ClientWriters = Arc<Mutex<HashMap<usize, mpsc::UnboundedSender<Vec<u8>>>>>;
 type ClientTasks = Arc<Mutex<Vec<JoinHandle<()>>>>;
 
-/// TCP 服务端步骤。
-///
-/// 运行模型：
-/// - 监听本地端口并接收客户端连接。
-/// - 每个客户端有独立读任务，读到数据后向上级发布消息。
-/// - 上级消息到达时广播写给所有已连接客户端。
 pub struct TcpServerStep {
     context: BaseStepContext,
     running: Arc<AtomicBool>,
@@ -67,7 +56,6 @@ impl TcpServerStep {
         let end_flag = parse_hex_end_flag(data.end_flag.as_deref())
             .map_err(|err| format!("tcpserverstep[{}] invalid end_flag: {err}", context.id()))?;
 
-        // 使用 std listener 先做同步 bind，可以让 new 直接把端口占用等错误返回给调用方。
         let address = format!("{}:{}", data.bind_addr, data.port);
         let std_listener = StdTcpListener::bind(&address)
             .map_err(|err| format!("bind {address} failed: {err}"))?;
@@ -112,7 +100,6 @@ impl TcpServerStep {
                 let context_for_reader = context_for_accept.clone();
                 let end_flag_for_reader = end_flag.clone();
 
-                // 每个客户端独立读。客户端断开或读取失败时，移除它的写入通道。
                 let reader_task = async_runtime::spawn(async move {
                     let mut read_buffer = vec![0_u8; max_read_bytes];
                     let mut packet_buffer = Vec::<u8>::new();
@@ -164,7 +151,7 @@ impl TcpServerStep {
         Ok(step)
     }
 
-    /// 根据是否配置结束符，发布原始读取数据或完整数据包。
+    /// 按结束符配置发布原始读取数据或完整数据包。
     fn publish_received(
         context: &BaseStepContext,
         packet_buffer: &mut Vec<u8>,
@@ -212,31 +199,32 @@ impl StepManifestProvider for TcpServerStep {
     /// 返回 TCP 服务端步骤元数据。
     fn manifest() -> StepManifest {
         StepManifest {
-            r#type: "TcpServerStep".to_string(),
-            name: "TCP 服务端".to_string(),
-            description:
-                "监听本地 TCP 端口，接收客户端数据并发布上行消息，读取下行消息后广播写回客户端"
-                    .to_string(),
-            default_data: serde_json::json!([
-                   {
-                    "title": "结束符(HEX)",
-                    "dataIndex": "end_flag",
-                    "valueType": "text",
-                    "initialValue": null
-                },
-                {
-                    "title": "监听IP地址",
-                    "dataIndex": "bind_addr",
-                    "valueType": "text",
-                    "initialValue": "0.0.0.0"
-                },
-                {
-                    "title": "监听端口",
-                    "dataIndex": "port",
-                    "valueType": "digit",
-                    "initialValue": 502
-                },
-            ]),
+            r#type: "TcpServerStep",
+            data: StepManifestData {
+                name: "TCP 服务端",
+                description:
+                    "监听本地 TCP 端口，接收客户端数据并发布上行消息，读取下行消息后广播写回客户端",
+                columns: vec![
+                    serde_json::json!({
+                        "title": "结束符(HEX)",
+                        "dataIndex": "end_flag",
+                        "valueType": "text",
+                        "initialValue": null
+                    }),
+                    serde_json::json!({
+                        "title": "监听IP地址",
+                        "dataIndex": "bind_addr",
+                        "valueType": "text",
+                        "initialValue": "0.0.0.0"
+                    }),
+                    serde_json::json!({
+                        "title": "监听端口",
+                        "dataIndex": "port",
+                        "valueType": "digit",
+                        "initialValue": 502
+                    }),
+                ],
+            },
         }
     }
 }

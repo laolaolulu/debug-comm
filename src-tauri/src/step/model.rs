@@ -166,17 +166,25 @@ pub fn find_bytes(buffer: &[u8], needle: &[u8]) -> Option<usize> {
 
 /// 步骤清单项。
 /// 前端 StepList 可直接通过该结构展示步骤列表，并在拖拽创建节点时使用默认 data。
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct StepManifest {
     /// 步骤类型，对应 node.type。
-    pub r#type: String,
+    #[serde(rename = "type")]
+    pub r#type: &'static str,
     /// 前端显示名称。
-    pub name: String,
+    pub data: StepManifestData,
+}
+
+/// 步骤清单默认节点 data。
+#[derive(Debug, Clone, Serialize)]
+pub struct StepManifestData {
+    /// 前端显示名称。
+    pub name: &'static str,
     /// 步骤说明。
-    pub description: String,
+    pub description: &'static str,
 
     /// 新建该步骤节点时默认写入的 data。
-    pub default_data: Value,
+    pub columns: Vec<Value>,
 }
 
 /// 工作流定义结构。

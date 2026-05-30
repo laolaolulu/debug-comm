@@ -1,5 +1,5 @@
 use crate::step::basestep::{BaseStep, StepManifestProvider};
-use crate::step::model::{StepManifest, StepMsg, WorkflowNode};
+use crate::step::model::{StepManifest, StepManifestData, StepMsg, WorkflowNode};
 use crate::step::workflow::Workflow;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -8,12 +8,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};
 
 /// 接收数据窗口步骤节点 data 结构。
-/// 当前只保留最基础的显示字段。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DisOutputStepData {
-    /// 节点显示名称。
     pub name: String,
-    /// 节点说明。
     #[serde(default)]
     pub description: String,
 }
@@ -30,8 +27,6 @@ struct WorkflowStepMessagePayload {
     time: u64,
 }
 
-/// 接收数据窗口步骤。
-/// 该步骤读取下级消息并推送给前端显示。
 pub struct DisOutputStep {
     id: String,
     workflow_id: String,
@@ -39,15 +34,13 @@ pub struct DisOutputStep {
 }
 
 impl DisOutputStep {
-    /// 创建并启动接收数据窗口步骤。
+    /// 创建接收数据窗口步骤。
     pub fn new(
         node: &WorkflowNode,
         workflow: Arc<Workflow>,
         app: Option<AppHandle>,
     ) -> Result<Arc<Self>, String> {
-        // 仍然解析 data，是为了尽早发现接收窗口节点配置结构不合法。
-        let _data = node
-            .data
+        node.data
             .parse::<DisOutputStepData>()
             .map_err(|err| format!("disoutputstep[{}] invalid data: {err}", node.id))?;
 
@@ -80,10 +73,12 @@ impl StepManifestProvider for DisOutputStep {
     /// 返回接收数据窗口步骤元数据。
     fn manifest() -> StepManifest {
         StepManifest {
-            r#type: "DisOutputStep".to_string(),
-            name: "接收数据窗口".to_string(),
-            description: "读取下级消息并推送给前端显示".to_string(),
-            default_data: serde_json::json!([]),
+            r#type: "DisOutputStep",
+            data: StepManifestData {
+                name: "接收数据窗口",
+                description: "读取下级消息并推送给前端显示",
+                columns: vec![],
+            },
         }
     }
 }

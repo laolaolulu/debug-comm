@@ -1,6 +1,7 @@
 use crate::step::basestep::{BaseStep, BaseStepContext, StepManifestProvider};
 use crate::step::model::{
-    find_bytes, parse_hex_end_flag, value_to_bytes, StepManifest, StepMsg, WorkflowNode,
+    find_bytes, parse_hex_end_flag, value_to_bytes, StepManifest, StepManifestData, StepMsg,
+    WorkflowNode,
 };
 use crate::step::workflow::Workflow;
 use serde::{Deserialize, Serialize};
@@ -12,31 +13,21 @@ use std::time::Duration;
 use tauri::async_runtime::{self, JoinHandle};
 
 /// 串口步骤节点 data 结构。
-/// 该结构会直接对应前端工作流节点中的 data 字段。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SerialPortStepData {
-    /// 节点显示名称。
     pub name: String,
-    /// 节点说明。
     #[serde(default)]
     pub description: String,
-    /// 可选的 16 进制结束符，例如 0A0D。为空时读到多少就发布多少。
     #[serde(default)]
     pub end_flag: Option<String>,
-    /// 串口号，例如 COM1。
     pub port_name: String,
-    /// 波特率。
     pub baud_rate: u32,
-    /// 数据位，常见值为 5/6/7/8。
     #[serde(default = "default_data_bits")]
     pub data_bits: u8,
-    /// 停止位，支持 1 或 2。
     #[serde(default = "default_stop_bits")]
     pub stop_bits: u8,
-    /// 校验位：none/odd/even。
     #[serde(default = "default_parity")]
     pub parity: String,
-    /// 控制流：none/software/hardware。
     #[serde(default = "default_flow_control")]
     pub flow_control: String,
 }
@@ -61,10 +52,6 @@ fn default_flow_control() -> String {
     "none".to_string()
 }
 
-/// 串口步骤。
-/// 1. 读取来自上级步骤的消息。
-/// 2. 收到消息后写入串口。
-/// 3. 从串口读取到数据后，再向上级发布消息。
 pub struct SerialPortStep {
     context: BaseStepContext,
     running: Arc<AtomicBool>,
@@ -83,8 +70,6 @@ impl SerialPortStep {
         let end_flag = parse_hex_end_flag(data.end_flag.as_deref())
             .map_err(|err| format!("serialportstep[{}] invalid end_flag: {err}", context.id()))?;
 
-        // 串口 builder 集中应用文档中定义的通信参数。
-        // 这里把字符串配置转换成 serialport crate 的枚举，避免前端直接依赖 Rust 枚举名。
         let writer = serialport::new(&data.port_name, data.baud_rate)
             .data_bits(Self::parse_data_bits(data.data_bits)?)
             .stop_bits(Self::parse_stop_bits(data.stop_bits)?)
@@ -117,8 +102,6 @@ impl SerialPortStep {
                         let received = &buffer[..size];
 
                         if let Some(flag) = &end_flag {
-                            // 配置了结束符时，读任务会把多次读取结果累积到 packet_buffer，
-                            // 每发现一个完整包就发布一次，尽量降低串口粘包/拆包对上层步骤的影响。
                             packet_buffer.extend_from_slice(received);
                             while let Some(index) = find_bytes(&packet_buffer, flag) {
                                 let packet_end = index + flag.len();
@@ -149,7 +132,7 @@ impl SerialPortStep {
         Ok(step)
     }
 
-    /// 将前端配置的数据位数字转换为 serialport crate 的枚举。
+    /// 将前端配置的数据位转换为 serialport 枚举。
     fn parse_data_bits(value: u8) -> Result<serialport::DataBits, String> {
         match value {
             5 => Ok(serialport::DataBits::Five),
@@ -160,7 +143,7 @@ impl SerialPortStep {
         }
     }
 
-    /// 将前端配置的停止位数字转换为 serialport crate 的枚举。
+    /// 将前端配置的停止位转换为 serialport 枚举。
     fn parse_stop_bits(value: u8) -> Result<serialport::StopBits, String> {
         match value {
             1 => Ok(serialport::StopBits::One),
@@ -169,7 +152,7 @@ impl SerialPortStep {
         }
     }
 
-    /// 将字符串校验位配置转换为 serialport crate 的枚举。
+    /// 将前端配置的校验位转换为 serialport 枚举。
     fn parse_parity(value: &str) -> Result<serialport::Parity, String> {
         match value.to_lowercase().as_str() {
             "none" | "no" => Ok(serialport::Parity::None),
@@ -179,7 +162,7 @@ impl SerialPortStep {
         }
     }
 
-    /// 将字符串控制流配置转换为 serialport crate 的枚举。
+    /// 将前端配置的流控方式转换为 serialport 枚举。
     fn parse_flow_control(value: &str) -> Result<serialport::FlowControl, String> {
         match value.to_lowercase().as_str() {
             "none" | "no" => Ok(serialport::FlowControl::None),
@@ -215,64 +198,65 @@ impl StepManifestProvider for SerialPortStep {
     /// 返回串口通信步骤元数据。
     fn manifest() -> StepManifest {
         StepManifest {
-            r#type: "SerialPortStep".to_string(),
-            name: "串口通信".to_string(),
-            description: "读取上级消息并写入串口，串口收到数据后再向上级发布消息".to_string(),
-            default_data: serde_json::json!([
-                        {
-                            "title": "结束符(HEX)",
-                            "dataIndex": "end_flag",
-                            "valueType": "text",
-                            "initialValue": null
-                        },
-                        {
-                            "title": "串口号",
-                            "dataIndex": "port_name",
-                            "valueType": "text",
-                            "initialValue": "COM1"
-                        },
-                        {
-                            "title": "波特率",
-                            "dataIndex": "baud_rate",
-                            "valueType": "digit",
-                            "initialValue": 9600
-                        },
-                        {
-                            "title": "数据位",
-                            "dataIndex": "data_bits",
-                            "valueType": "digit",
-                            "initialValue": default_data_bits()
-                        },
-                        {
-                            "title": "停止位",
-                            "dataIndex": "stop_bits",
-                            "valueType": "digit",
-                            "initialValue": default_stop_bits()
-                        },
-                        {
-                            "title": "校验位",
-                            "dataIndex": "parity",
-                            "valueType": "select",
-                            "initialValue": default_parity(),
-                            "valueEnum": {
-                                "none": { "text": "None" },
-                                "odd": { "text": "Odd" },
-                                "even": { "text": "Even" }
-                            }
-                        },
-                        {
-                            "title": "控制流",
-                            "dataIndex": "flow_control",
-                            "valueType": "select",
-                            "initialValue": default_flow_control(),
-                            "valueEnum": {
-                                "none": { "text": "None" },
-                                "software": { "text": "Software" },
-                                "hardware": { "text": "Hardware" }
-                            }
+            r#type: "SerialPortStep",
+            data: StepManifestData {
+                name: "串口通信",
+                description: "读取上级消息并写入串口，串口收到数据后再向上级发布消息",
+                columns: vec![
+                    serde_json::json!({
+                        "title": "结束符(HEX)",
+                        "dataIndex": "end_flag",
+                        "valueType": "text",
+                        "initialValue": null
+                    }),
+                    serde_json::json!({
+                        "title": "串口号",
+                        "dataIndex": "port_name",
+                        "valueType": "text",
+                        "initialValue": "COM1"
+                    }),
+                    serde_json::json!({
+                        "title": "波特率",
+                        "dataIndex": "baud_rate",
+                        "valueType": "digit",
+                        "initialValue": 9600
+                    }),
+                    serde_json::json!({
+                        "title": "数据位",
+                        "dataIndex": "data_bits",
+                        "valueType": "digit",
+                        "initialValue": default_data_bits()
+                    }),
+                    serde_json::json!({
+                        "title": "停止位",
+                        "dataIndex": "stop_bits",
+                        "valueType": "digit",
+                        "initialValue": default_stop_bits()
+                    }),
+                    serde_json::json!({
+                        "title": "校验位",
+                        "dataIndex": "parity",
+                        "valueType": "select",
+                        "initialValue": default_parity(),
+                        "valueEnum": {
+                            "none": { "text": "None" },
+                            "odd": { "text": "Odd" },
+                            "even": { "text": "Even" }
                         }
-
-            ]),
+                    }),
+                    serde_json::json!({
+                        "title": "控制流",
+                        "dataIndex": "flow_control",
+                        "valueType": "select",
+                        "initialValue": default_flow_control(),
+                        "valueEnum": {
+                            "none": { "text": "None" },
+                            "software": { "text": "Software" },
+                            "hardware": { "text": "Hardware" }
+                        }
+                    }),
+                ],
+            },
         }
     }
 }

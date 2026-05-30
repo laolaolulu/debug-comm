@@ -40,14 +40,13 @@ pub struct Workflow {
 impl Workflow {
     /// 返回当前后端支持的所有步骤类型定义。
     pub fn available_steps() -> Vec<StepManifest> {
-        let mut steps = vec![
+        vec![
             DisInputStep::manifest(),
             DisOutputStep::manifest(),
             TcpClientStep::manifest(),
             TcpServerStep::manifest(),
-        ];
-        steps.push(SerialPortStep::manifest());
-        steps
+            SerialPortStep::manifest(),
+        ]
     }
 
     /// 使用工作流定义创建实例，并自动注册到全局实例集合中。
