@@ -1,15 +1,20 @@
-import { EditOutlined, PauseCircleOutlined, PlayCircleOutlined } from "@ant-design/icons";
-import { invoke } from "@tauri-apps/api/core";
-import { App, Button, Flex, Space } from "antd";
-import { FormattedMessage } from "react-intl";
-import SelectWork from "../../SelectWork";
+import {
+  EditOutlined,
+  PauseCircleOutlined,
+  PlayCircleOutlined,
+} from '@ant-design/icons';
+import { invoke } from '@tauri-apps/api/core';
+import { App, Button, Flex, Space } from 'antd';
+import { FormattedMessage } from 'react-intl';
+import SelectWork from '../../SelectWork';
 import {
   useWorkflowIsChange,
   useWorkflowStore,
-} from "../../../models/workflow";
-import { useActiveTabStore } from "../../../models/activeTab";
-import { useWorkrunStore } from "../../../models/workrun";
+} from '../../../models/workflow';
+import { useActiveTabStore } from '../../../models/activeTab';
+import { useWorkrunStore } from '../../../models/workrun';
 
+// 渲染工作台头部操作栏。
 export default () => {
   const { message, modal } = App.useApp();
   const select = useWorkflowStore((state) => state.select);
@@ -19,22 +24,22 @@ export default () => {
   const isRunning = runningIds.includes(select.id);
 
   return (
-    <Flex justify="space-between" style={{ margin: 10 }}>
+    <Flex justify='space-between' style={{ margin: 10 }}>
       <SelectWork />
       <Space>
         {isRunning ? (
           <Button
             icon={<PauseCircleOutlined />}
-            type="primary"
+            type='primary'
             danger
             onClick={async () => {
               try {
-                await invoke("stop_workflow", { id: select.id });
+                await invoke('stop_workflow', { id: select.id });
                 removeRunning(select.id);
                 message.success(
                   <FormattedMessage
-                    id="work.message.stopped"
-                    defaultMessage="任务已停止：{workflowId}"
+                    id='work.message.stopped'
+                    defaultMessage='任务已停止：{workflowId}'
                     values={{ workflowId: select.id }}
                   />,
                 );
@@ -43,23 +48,23 @@ export default () => {
               }
             }}
           >
-            <FormattedMessage id="work.action.stop" defaultMessage="停止" />
+            <FormattedMessage id='work.action.stop' defaultMessage='停止' />
           </Button>
         ) : (
           <Button
             icon={<PlayCircleOutlined />}
-            type="primary"
+            type='primary'
             onClick={async () => {
               try {
-                const workflowId = await invoke<string>("start_workflow", {
+                await invoke<void>('start_workflow', {
                   json: JSON.stringify(select),
                 });
-                addRunning(workflowId);
+                addRunning(select.id);
                 message.success(
                   <FormattedMessage
-                    id="work.message.started"
-                    defaultMessage="任务已启动：{workflowId}"
-                    values={{ workflowId }}
+                    id='work.message.started'
+                    defaultMessage='任务已启动：{workflowId}'
+                    values={{ workflowId: select.id }}
                   />,
                 );
               } catch (error) {
@@ -67,7 +72,7 @@ export default () => {
               }
             }}
           >
-            <FormattedMessage id="work.action.start" defaultMessage="启动" />
+            <FormattedMessage id='work.action.start' defaultMessage='启动' />
           </Button>
         )}
         <Button
@@ -77,17 +82,17 @@ export default () => {
               modal.warning({
                 content: (
                   <FormattedMessage
-                    id="save.warning"
-                    defaultMessage="请先保存，或者放弃重置"
+                    id='save.warning'
+                    defaultMessage='请先保存，或者放弃重置'
                   />
                 ),
               });
               return;
             }
-            setActiveTab("designer");
+            setActiveTab('designer');
           }}
         >
-          <FormattedMessage id="work.action.settings" defaultMessage="设置" />
+          <FormattedMessage id='work.action.settings' defaultMessage='设置' />
         </Button>
       </Space>
     </Flex>

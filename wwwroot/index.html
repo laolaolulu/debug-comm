@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="debug-comm 是一款开源的桌面通信调试工具，支持串口、TCP 客户端、TCP 服务端、发送窗口、接收日志和可视化工作流。"
+      content="debug-comm 是一款开源的桌面通信调试工具，基于 Tauri 2 + React + Rust 构建，支持串口、TCP 客户端、TCP 服务端、JS 自动化脚本、发送窗口、接收日志和可视化工作流。"
     />
     <title>debug-comm - 开源通信调试工具</title>
     <link rel="icon" href="./assets/logo.svg" />
@@ -23,8 +23,10 @@
         <span></span>
       </button>
       <nav class="site-nav" aria-label="主导航">
+        <a href="#demo">演示</a>
         <a href="#features">功能特性</a>
         <a href="#workflow">工作流</a>
+        <a href="#node-types">节点</a>
         <a href="#download">下载</a>
         <a href="#faq">FAQ</a>
         <a class="nav-cta" href="https://github.com/laolaolulu/debug-comm" target="_blank" rel="noreferrer">GitHub</a>
@@ -39,7 +41,7 @@
           </a>
           <h1>面向串口与 TCP 的可视化通信调试工具</h1>
           <p>
-            用工作流组织通信链路，拖拽节点、连接数据流、启动任务，然后在一个清晰的桌面应用里发送数据、查看接收日志、定位协议问题。
+            基于 Tauri 2 + React + TypeScript + Rust 构建，以可视化工作流组织通信链路。支持串口、TCP 客户端、TCP 服务端、发送窗口、接收窗口和 JS 自动化脚本等节点，拖拽连接、一键启动、收发数据、查看日志。
           </p>
           <div class="hero-actions">
             <a class="primary-btn" href="#download">获取客户端</a>
@@ -47,8 +49,8 @@
           </div>
           <dl class="hero-stats" aria-label="项目能力概览">
             <div>
-              <dt>5+</dt>
-              <dd>通信节点</dd>
+              <dt>6</dt>
+              <dd>节点类型</dd>
             </div>
             <div>
               <dt>2</dt>
@@ -99,6 +101,17 @@
         </div>
       </section>
 
+      <section class="section demo" id="demo">
+        <div class="section-heading">
+          <span>Demo</span>
+          <h2>基础通信测试演示</h2>
+          <p>通过视频快速了解 debug-comm 的串口与 TCP 通信调试流程。</p>
+        </div>
+        <div class="demo-video-wrap">
+          <video class="demo-video" src="./assets/communication-demo.mp4" controls preload="metadata" poster="./assets/poster.jpg"></video>
+        </div>
+      </section>
+
       <section class="section" id="features">
         <div class="section-heading">
           <span>Features</span>
@@ -109,32 +122,47 @@
           <article class="feature-card">
             <div class="icon">↔</div>
             <h3>可视化工作流</h3>
-            <p>基于节点和连线组织发送、通信与接收路径，适合反复验证设备协议和 TCP 链路。</p>
+            <p>基于 React Flow 进行节点拖拽、连接和参数配置，适合反复验证设备协议和 TCP 链路。</p>
           </article>
           <article class="feature-card">
             <div class="icon">⌁</div>
             <h3>串口通信</h3>
-            <p>支持串口号、波特率、数据位、停止位、校验位、流控和结束符等常用参数。</p>
+            <p>支持串口号、波特率、数据位、停止位、校验位、流控和结束符配置。</p>
           </article>
           <article class="feature-card">
             <div class="icon">⇄</div>
             <h3>TCP 客户端 / 服务端</h3>
-            <p>可主动连接远端服务，也可监听本地端口接收连接，覆盖本机联调和设备接入场景。</p>
+            <p>主动连接远端 TCP 服务或监听本地端口接收客户端连接，覆盖本机联调和设备接入场景。</p>
           </article>
           <article class="feature-card">
             <div class="icon">16</div>
             <h3>UTF-8 / HEX 输入</h3>
-            <p>发送窗口支持文本和十六进制输入，兼容大小写、空格与常见分隔符。</p>
+            <p>发送窗口支持文本和十六进制输入，HEX 模式兼容大小写、空格与常见分隔符。</p>
           </article>
           <article class="feature-card">
             <div class="icon">▤</div>
             <h3>接收日志持久化</h3>
-            <p>接收窗口按时间展示数据记录，支持 UTF-8 / HEX 切换和历史日志加载。</p>
+            <p>接收窗口按时间展示数据记录，支持 UTF-8 / HEX 切换、本地持久化和历史日志加载。</p>
+          </article>
+          <article class="feature-card">
+            <div class="icon">JS</div>
+            <h3>JS 自动化脚本</h3>
+            <p>使用 boa_engine 嵌入式 JS 引擎处理上下行消息，支持 read_up / read_down 回调和 write_up / write_down 转发。</p>
           </article>
           <article class="feature-card">
             <div class="icon">✓</div>
             <h3>任务生命周期管理</h3>
-            <p>任务启动、停止和运行列表由后端统一管理，停止时释放串口、后台任务和 socket。</p>
+            <p>启动、停止和运行列表由后端统一管理，停止时释放串口、后台任务和 socket 资源。</p>
+          </article>
+          <article class="feature-card">
+            <div class="icon">⚙</div>
+            <h3>本地持久化</h3>
+            <p>工作流配置、语言设置和接收日志保存在本地应用数据目录，重启不丢失。</p>
+          </article>
+          <article class="feature-card">
+            <div class="icon">A</div>
+            <h3>中英文界面</h3>
+            <p>基于 react-intl 的国际化支持，可随时在中英文之间切换。</p>
           </article>
         </div>
       </section>
@@ -144,11 +172,12 @@
           <span>Workflow</span>
           <h2>把临时调试步骤沉淀成稳定链路</h2>
           <p>
-            新建工作流后，你可以添加发送窗口、串口、TCP 客户端、TCP 服务端和接收窗口。连接方向就是数据方向，保存后即可在工作台一键启动。
+            新建工作流后，你可以添加发送窗口、串口、TCP 客户端、TCP 服务端、JS 自动化脚本和接收窗口。连接方向就是数据方向，保存后即可在工作台一键启动。
           </p>
           <ul class="check-list">
-            <li>发送窗口向下游通信节点写入数据</li>
+            <li>发送窗口向下游通信节点写入 UTF-8 或 HEX 数据</li>
             <li>通信节点把设备或 socket 返回的数据广播给接收窗口</li>
+            <li>JS 脚本节点可自定义消息处理逻辑，实现协议解析与自动应答</li>
             <li>接收窗口生成本地日志，重启应用后仍可查看最近记录</li>
           </ul>
         </div>
@@ -163,6 +192,73 @@
 18:42:10.041  serial-com3 8 bytes   48 45 4C 4C 4F 0D 0A
 18:42:11.506  tcp-client  2 bytes   OK</code></pre>
         </div>
+      </section>
+
+      <section class="section" id="tech-stack">
+        <div class="section-heading">
+          <span>Tech Stack</span>
+          <h2>技术栈</h2>
+        </div>
+        <div class="table-wrap">
+          <table class="info-table">
+            <thead>
+              <tr><th>层级</th><th>技术</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>桌面框架</td><td>Tauri 2</td></tr>
+              <tr><td>前端</td><td>React 19 + TypeScript 5.8 + Vite 7</td></tr>
+              <tr><td>UI</td><td>Ant Design 6 + @ant-design/pro-components</td></tr>
+              <tr><td>流程图</td><td>@xyflow/react (ReactFlow)</td></tr>
+              <tr><td>状态管理</td><td>Zustand</td></tr>
+              <tr><td>消息持久化</td><td>Dexie (IndexedDB)</td></tr>
+              <tr><td>国际化</td><td>react-intl (中/英文)</td></tr>
+              <tr><td>Rust 后端</td><td>Tokio + serialport + boa_engine</td></tr>
+              <tr><td>本地能力</td><td>Tauri Store、Dialog、FS、Opener 插件</td></tr>
+              <tr><td>自动更新</td><td>Tauri Updater、Process 插件</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="node-types">
+        <div class="section-heading">
+          <span>Node Types</span>
+          <h2>节点类型</h2>
+        </div>
+        <div class="table-wrap">
+          <table class="info-table">
+            <thead>
+              <tr><th>节点</th><th>说明</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>发送数据窗口</td><td>人工输入数据，并向下游通信节点发送</td></tr>
+              <tr><td>接收数据窗口</td><td>展示相邻通信节点返回的数据，并持久化为本地日志</td></tr>
+              <tr><td>串口通信</td><td>打开串口，接收下行数据写入串口，并将串口返回数据发布出去</td></tr>
+              <tr><td>TCP 客户端</td><td>主动连接远端 TCP 服务，支持读写</td></tr>
+              <tr><td>TCP 服务端</td><td>监听本地端口，接收客户端数据并支持广播写回</td></tr>
+              <tr><td>JS 自动化脚本</td><td>使用 JavaScript 处理上下行消息，支持 read_up / read_down 回调和 write_up / write_down 转发</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="roadmap">
+        <div class="section-heading">
+          <span>Roadmap</span>
+          <h2>开发计划</h2>
+        </div>
+        <ul class="roadmap-list">
+          <li class="done">基础通信：TCP、串口</li>
+          <li class="done">JavaScript 脚本 通信报文模拟</li>
+          <li>Lua 脚本 通信报文模拟</li>
+          <li>通信报文模拟 脚本编写 AI 能力 Pro</li>
+          <li>Modbus 通信调试</li>
+          <li>MQTT 协议调试</li>
+          <li>虚拟串口 Pro</li>
+          <li>串口监控，不占用当前串口</li>
+          <li>任务配置文件云端同步功能 Pro</li>
+          <li>C# (.NET 8) Runtime 开发</li>
+        </ul>
       </section>
 
       <section class="section download" id="download">

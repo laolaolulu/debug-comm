@@ -21,6 +21,9 @@ const bytesToHex = (bytes: Uint8Array) =>
     byte.toString(16).padStart(2, "0").toUpperCase(),
   ).join(" ");
 
+const toBytes = (value: Uint8Array | number[]) =>
+  value instanceof Uint8Array ? value : new Uint8Array(value);
+
 const getRelatedSendStepIds = (workflow: Workflow, outputStepId: string) => {
   const lowerStepIds = new Set(
     workflow.edges
@@ -145,6 +148,7 @@ const OutputPanel = ({
         ) : (
           items.map((item, index) => {
             const isSend = sendStepIdSet.has(item.stepBy);
+            const msg = toBytes(item.msg);
             return (
               <div
                 key={index}
@@ -171,13 +175,13 @@ const OutputPanel = ({
                       {dayjs(item.time).format("YYYY-MM-DD HH:mm:ss.SSS")}
                     </Typography.Text>
                     <Typography.Text type="secondary" style={{ fontSize: 11 }}>
-                      {nodeNameById.get(item.stepBy)} · {item.msg.length} B
+                      {nodeNameById.get(item.stepBy)} · {msg.length} B
                     </Typography.Text>
                   </Flex>
                   <div style={{ marginTop: 4 }}>
                     {mode === "hex"
-                      ? bytesToHex(item.msg)
-                      : textDecoder.decode(item.msg)}
+                      ? bytesToHex(msg)
+                      : textDecoder.decode(msg)}
                   </div>
                 </div>
               </div>

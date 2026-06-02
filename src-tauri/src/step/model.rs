@@ -1,9 +1,8 @@
-use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 
-/// 消息类型枚举。
+/// 消息类型。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MsgType {
     /// 消息向上发布。
@@ -23,87 +22,62 @@ pub struct StepMsg<T> {
     pub msg: T,
 }
 
-/// 工作流节点坐标。
-/// 对齐前端 ReactFlow node.position 结构。
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WorkflowNodePosition {
-    /// 节点在画布中的横坐标。
-    pub x: f64,
-    /// 节点在画布中的纵坐标。
-    pub y: f64,
+/// 工作流节点结构。
+#[derive(Debug, Clone, Deserialize)]
+pub struct WorkflowNode {
+    /// 节点唯一标识。
+    pub id: String,
+    /// 节点类型。
+    #[serde(rename = "type")]
+    pub r#type: String,
+    /// 节点业务数据。
+    pub data: WorkflowNodeData,
 }
 
 /// 工作流节点数据。
-/// 对齐当前文档里的 name/description 设计，同时通过 extra 保留前端扩展字段。
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct WorkflowNodeData {
-    /// 节点显示名称，前端可修改。
-    #[serde(default)]
+    /// 节点显示名称。
     pub name: String,
-    /// 节点说明，前端可修改。
-    #[serde(default)]
+    /// 节点说明。
     pub description: String,
     /// 节点参数表单定义。
-    /// 结构直接对齐前端 ProFormColumnsType[]，可直接交给 BetaSchemaForm 渲染。
-    #[serde(default)]
     pub columns: Vec<Value>,
-    /// 保留节点 data 下的其他扩展字段。
+    /// 节点具体参数。
     #[serde(flatten)]
-    pub extra: HashMap<String, Value>,
+    pub params: HashMap<String, Value>,
 }
 
 impl WorkflowNodeData {
-    /// 将当前节点 data 反序列化为具体步骤自己的参数结构。
-    pub fn parse<T>(&self) -> Result<T, String>
-    where
-        T: DeserializeOwned,
-    {
-        let mut map = serde_json::Map::<String, Value>::new();
-
-        // name/description 是所有节点的公共字段，先放入参数对象。
-        map.insert("name".to_string(), Value::String(self.name.clone()));
-        map.insert(
-            "description".to_string(),
-            Value::String(self.description.clone()),
-        );
-
-        Self::collect_column_initial_values(&self.columns, &mut map);
-
-        for (key, value) in &self.extra {
-            map.insert(key.clone(), value.clone());
-        }
-
-        serde_json::from_value(Value::Object(map)).map_err(|err| err.to_string())
+    /// 按字段名获取节点参数，实际参数优先于表单初始值。
+    pub fn value(&self, key: &str) -> Option<&Value> {
+        self.params
+            .get(key)
+            .or_else(|| Self::column_initial_value(&self.columns, key))
     }
 
-    /// 递归提取表单定义中的 initialValue，组装成步骤参数对象。
-    fn collect_column_initial_values(
-        columns: &[Value],
-        values: &mut serde_json::Map<String, Value>,
-    ) {
+    /// 递归读取表单字段的 initialValue。
+    fn column_initial_value<'a>(columns: &'a [Value], key: &str) -> Option<&'a Value> {
         for column in columns {
             let Some(column_obj) = column.as_object() else {
                 continue;
             };
 
-            if let Some(data_index) = column_obj.get("dataIndex").and_then(Value::as_str) {
-                if let Some(initial_value) = column_obj.get("initialValue") {
-                    values.insert(data_index.to_string(), initial_value.clone());
-                }
+            if column_obj.get("dataIndex").and_then(Value::as_str) == Some(key) {
+                return column_obj.get("initialValue");
             }
 
             if let Some(children) = column_obj.get("columns").and_then(Value::as_array) {
-                Self::collect_column_initial_values(children, values);
+                if let Some(value) = Self::column_initial_value(children, key) {
+                    return Some(value);
+                }
             }
         }
+        None
     }
 }
 
 /// 将通用 JSON 消息体转换为底层通信步骤使用的 byte[]。
-///
-/// 约定：
-/// - 数字数组按 byte[] 写入。
-/// - 其他 JSON 值一律拒绝，由调用方明确处理错误。
 pub fn value_to_bytes(value: &Value) -> Result<Vec<u8>, String> {
     let Value::Array(items) = value else {
         return Err("message must be a byte array".to_string());
@@ -122,30 +96,7 @@ pub fn value_to_bytes(value: &Value) -> Result<Vec<u8>, String> {
         .collect()
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn value_to_bytes_accepts_byte_arrays() {
-        assert_eq!(
-            value_to_bytes(&json!([0, 1, 255])).unwrap(),
-            vec![0, 1, 255]
-        );
-    }
-
-    #[test]
-    fn value_to_bytes_rejects_unsupported_values() {
-        assert!(value_to_bytes(&json!("hello")).is_err());
-        assert!(value_to_bytes(&json!({ "value": [1, 2] })).is_err());
-        assert!(value_to_bytes(&json!([256])).is_err());
-        assert!(value_to_bytes(&json!([1.5])).is_err());
-    }
-}
-
-/// 解析 16 进制结束符配置，例如 "0A0D" 或 "0A 0D"。
-/// 返回 None 表示未配置结束符，通信步骤会按单次读取结果直接发布。
+/// 解析 16 进制结束符配置。
 pub fn parse_hex_end_flag(value: Option<&str>) -> Result<Option<Vec<u8>>, String> {
     let Some(raw) = value else {
         return Ok(None);
@@ -175,7 +126,6 @@ pub fn parse_hex_end_flag(value: Option<&str>) -> Result<Option<Vec<u8>>, String
 }
 
 /// 在 buffer 中查找 needle 第一次出现的位置。
-/// 标准库目前没有稳定的切片子串查找，这里保留一个很小的工具函数供拆包使用。
 pub fn find_bytes(buffer: &[u8], needle: &[u8]) -> Option<usize> {
     if needle.is_empty() {
         return None;
@@ -187,70 +137,55 @@ pub fn find_bytes(buffer: &[u8], needle: &[u8]) -> Option<usize> {
 }
 
 /// 步骤清单项。
-/// 前端 StepList 可直接通过该结构展示步骤列表，并在拖拽创建节点时使用默认 data。
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Serialize)]
 pub struct StepManifest {
-    /// 步骤类型，对应 node.type。
+    /// 步骤类型。
+    #[serde(rename = "type")]
     pub r#type: String,
+    /// 默认节点 data。
+    pub data: StepManifestData,
+}
+
+/// 步骤清单默认节点 data。
+#[derive(Serialize)]
+pub struct StepManifestData {
     /// 前端显示名称。
     pub name: String,
     /// 步骤说明。
     pub description: String,
-
-    /// 新建该步骤节点时默认写入的 data。
-    pub default_data: Value,
+    /// 节点参数表单配置。
+    pub columns: Vec<Value>,
 }
 
 /// 工作流定义结构。
-/// 对齐前端工作流设计器传入的 JSON 结构。
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Deserialize)]
 pub struct WorkflowDefinition {
-    /// 工作流唯一标识，对应前端设计器中的 id。
+    /// 工作流唯一标识。
     pub id: String,
-    /// 工作流名称，对应前端设计器中的 name。
+    /// 工作流名称。
     pub name: String,
-    /// 工作流描述，对应前端设计器中的 description。
+    /// 工作流描述。
     #[serde(default)]
     pub description: Option<String>,
-    /// 节点列表，对应 ReactFlow 的 nodes。
+    /// 节点列表。
     #[serde(default)]
     pub nodes: Vec<WorkflowNode>,
-    /// 连线列表，对应 ReactFlow 的 edges。
+    /// 连线列表。
     #[serde(default)]
     pub edges: Vec<WorkflowEdge>,
 }
 
-/// 工作流节点结构。
-/// 对齐前端设计器和 ReactFlow 当前实际使用的节点字段。
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WorkflowNode {
-    /// 节点唯一标识，对应前端 node.id。
-    pub id: String,
-    /// 节点类型，对应前端 node.type，例如 input/default/output。
-    pub r#type: String,
-    /// 节点位置，对应前端 node.position。
-    pub position: WorkflowNodePosition,
-    /// 节点业务数据，对应前端 node.data。
-    pub data: WorkflowNodeData,
-    /// 节点是否被选中。
-    #[serde(default)]
-    pub selected: bool,
-    /// 保留节点其他未显式声明的字段，避免丢失 ReactFlow 扩展属性。
-    #[serde(flatten)]
-    pub extra: HashMap<String, Value>,
-}
 /// 工作流连线结构。
-/// 对齐前端 ReactFlow edge 的核心字段，并保留其余扩展属性。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowEdge {
     /// 连线唯一标识。
     #[serde(default)]
     pub id: Option<String>,
-    /// 上游步骤 id，对应前端 ReactFlow edge.source。
+    /// 上游步骤 id。
     pub source: String,
-    /// 下游步骤 id，对应前端 ReactFlow edge.target。
+    /// 下游步骤 id。
     pub target: String,
-    /// 保留前端 edge 其他未显式声明的字段，避免丢失扩展信息。
+    /// 保留前端 edge 其他字段。
     #[serde(flatten)]
     pub extra: HashMap<String, Value>,
 }

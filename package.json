@@ -1,7 +1,7 @@
 {
   "name": "debug-comm",
   "private": true,
-  "version": "0.1.0-alpha.7",
+  "version": "0.1.0-alpha.19",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -41,5 +41,10 @@
     "babel-plugin-react-intl": "^8.2.25",
     "typescript": "~5.8.3",
     "vite": "^7.0.4"
-  }
+  },
+  "description": "一个基于 **Tauri 2 + React + TypeScript + Rust** 的桌面通信调试工具。",
+  "main": "index.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
 }

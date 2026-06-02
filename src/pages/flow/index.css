@@ -45,6 +45,10 @@
   transform: translateY(-1px);
 }
 
+.step-list-content:has(.neodrag-dragging) {
+  overflow: visible !important;
+}
+
 .ant-pro-form-group-title {
   border-bottom: 1px solid var(--ant-color-split);
   margin-block-end: unset;

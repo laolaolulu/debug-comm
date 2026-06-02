@@ -1,8 +1,8 @@
 pub mod basestep;
 pub mod disinputstep;
 pub mod disoutputstep;
+pub mod javascriptstep;
 pub mod model;
-#[cfg(not(target_os = "android"))]
 pub mod serialportstep;
 pub mod tcpclientstep;
 pub mod tcpserverstep;

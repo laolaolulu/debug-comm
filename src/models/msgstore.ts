@@ -13,6 +13,15 @@ export type MsgData = {
   time: number;
 };
 
+type RawMsgData = Omit<MsgData, "msg"> & {
+  msg: Uint8Array | number[];
+};
+
+const normalizeMessage = (record: RawMsgData): MsgData => ({
+  ...record,
+  msg: record.msg instanceof Uint8Array ? record.msg : new Uint8Array(record.msg),
+});
+
 class MsgDatabase extends Dexie {
   msgdata!: Table<
     MsgData & {
@@ -39,7 +48,7 @@ type MsgState = {
   /** 应用启动时调用一次：注册 Tauri 消息监听，并恢复每组最新消息。*/
   hydrate: () => Promise<void>;
   /** 统一写入入口：写 IndexedDB 后同步追加到内存 state。*/
-  appendMessage: (record: MsgData) => Promise<void>;
+  appendMessage: (record: RawMsgData) => Promise<void>;
   /** 清空单个 step 的消息。*/
   clearStep: (taskId: string, stepId: string) => Promise<void>;
 };
@@ -78,14 +87,15 @@ export const useMsgStore = create<MsgState>((set, get) => ({
   msgdata: [],
   msgcount: {},
   appendMessage: async (record) => {
-    await db.msgdata.add(record);
+    const message = normalizeMessage(record);
+    await db.msgdata.add(message);
     set((state) => ({
-      msgdata: [...state.msgdata, record].sort((a, b) => a.time - b.time),
+      msgdata: [...state.msgdata, message].sort((a, b) => a.time - b.time),
       msgcount: {
         ...state.msgcount,
-        [record.taskId]: {
-          ...(state.msgcount[record.taskId] ?? {}),
-          [record.stepId]: (state.msgcount[record.taskId]?.[record.stepId] ?? 0) + 1,
+        [message.taskId]: {
+          ...(state.msgcount[message.taskId] ?? {}),
+          [message.stepId]: (state.msgcount[message.taskId]?.[message.stepId] ?? 0) + 1,
         },
       },
     }));
@@ -110,14 +120,14 @@ export const useMsgStore = create<MsgState>((set, get) => ({
     }));
   },
   hydrate: async () => {
-    await listen<MsgData>("workflow-step-message", ({ payload }) => {
+    await listen<RawMsgData>("workflow-step-message", ({ payload }) => {
       void get().appendMessage(payload);
     });
 
     const { msgdata, counts } = await readLatestMessagesGroupByStep();
 
     set({
-      msgdata,
+      msgdata: msgdata.map(normalizeMessage),
       msgcount: counts,
     });
   },
