@@ -116,6 +116,13 @@ a {
   padding: 86px 0 68px;
 }
 
+.hero-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
 .release-pill {
   display: inline-flex;
   align-items: center;
@@ -184,6 +191,18 @@ a {
 .secondary-btn {
   border: 1px solid var(--line);
   background: #ffffff;
+}
+
+.github-star-button {
+  align-self: center;
+  flex: 0 0 auto;
+  border: 0;
+}
+
+.github-star-wrap {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
 }
 
 .hero-stats {

@@ -20,6 +20,9 @@ import { nodeType } from "..";
 import { useIntl } from "react-intl";
 import { useWorkflowStore } from "../../../models/workflow";
 
+// 不需要下挂节点的步骤类型（串口/网口通信步骤）
+const noSourceTypes = new Set(["SerialPortStep", "TcpClientStep", "TcpServerStep"]);
+
 const StepNode = ({ type, data }: NodeProps<WorkflowNode>) => {
   const intl = useIntl();
   return (
@@ -29,7 +32,9 @@ const StepNode = ({ type, data }: NodeProps<WorkflowNode>) => {
         {intl.formatMessage(nodeType[type as keyof typeof nodeType])}
       </div>
       <div style={{ fontSize: 14, fontWeight: 500 }}>{data.name}</div>
-      <Handle type="source" position={Position.Bottom} />
+      {!noSourceTypes.has(type as string) && (
+        <Handle type="source" position={Position.Bottom} />
+      )}
     </div>
   );
 };
