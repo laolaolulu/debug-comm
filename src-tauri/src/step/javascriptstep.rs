@@ -2,11 +2,13 @@ use crate::step::basestep::{BaseStep, BaseStepContext, StepManifestProvider};
 use crate::step::model::{MsgType, StepManifest, StepManifestData, StepMsg, WorkflowNode};
 use crate::step::workflow::Workflow;
 use boa_engine::native_function::NativeFunction;
-use boa_engine::{Context, JsString, JsValue, Source};
+use boa_engine::object::builtins::JsTypedArray;
+use boa_engine::{Context, JsResult, JsString, JsValue, Source};
 use serde_json::Value;
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
+use std::time::Duration;
 
 const DEFAULT_SCRIPT: &str = r#"function read_up(stepMsg) {
   write_down(stepMsg.msg);
@@ -16,6 +18,8 @@ function read_down(stepMsg) {
   write_up(stepMsg.msg);
 }
 "#;
+
+const JOB_POLL_INTERVAL: Duration = Duration::from_millis(10);
 
 enum JavaScriptStepEvent {
     Message(StepMsg<Value>),
@@ -117,48 +121,77 @@ fn run_worker(
     init_tx: Sender<Result<(), String>>,
 ) {
     let mut context = Context::default();
-    let init_result =
-        register_write_function(&mut context, "write_up", MsgType::Up, step_context.clone())
-            .and_then(|_| {
-                register_write_function(
-                    &mut context,
-                    "write_down",
-                    MsgType::Down,
-                    step_context.clone(),
-                )
-            })
-            .and_then(|_| {
-                context
-                    .eval(Source::from_bytes(script.as_str()))
-                    .map(|_| ())
-                    .map_err(|err| {
-                        format!(
-                            "javascriptstep[{}] init script failed: {err}",
-                            step_context.id()
-                        )
-                    })
-            });
+    let step_id = step_context.id().to_string();
+    let init_result = register_runtime(&mut context, &step_id)
+        .and_then(|_| {
+            register_write_function(&mut context, "write_up", MsgType::Up, step_context.clone())
+        })
+        .and_then(|_| {
+            register_write_function(
+                &mut context,
+                "write_down",
+                MsgType::Down,
+                step_context.clone(),
+            )
+        })
+        .and_then(|_| {
+            context
+                .eval(Source::from_bytes(script.as_str()))
+                .map(|_| ())
+                .map_err(|err| {
+                    format!(
+                        "javascriptstep[{}] init script failed: {err}",
+                        step_context.id()
+                    )
+                })
+        });
 
     if init_tx.send(init_result.clone()).is_err() || init_result.is_err() {
         return;
     }
 
-    while let Ok(event) = rx.recv() {
-        match event {
-            JavaScriptStepEvent::Message(step_msg) => {
-                if let Err(err) = call_script_reader(&mut context, &step_msg) {
-                    eprintln!(
-                        "javascriptstep[{}] message ignored: {err}",
-                        step_context.id()
-                    );
+    loop {
+        run_runtime_jobs(&mut context, &step_id, "runtime");
+
+        let event = match rx.recv_timeout(JOB_POLL_INTERVAL) {
+            Ok(event) => Some(event),
+            Err(RecvTimeoutError::Timeout) => None,
+            Err(RecvTimeoutError::Disconnected) => break,
+        };
+
+        if let Some(event) = event {
+            match event {
+                JavaScriptStepEvent::Message(step_msg) => {
+                    if let Err(err) = call_script_reader(&mut context, &step_msg) {
+                        eprintln!(
+                            "javascriptstep[{}] message ignored: {err}",
+                            step_context.id()
+                        );
+                    }
+                    run_runtime_jobs(&mut context, &step_id, "message");
                 }
+                JavaScriptStepEvent::Stop => break,
             }
-            JavaScriptStepEvent::Stop => break,
         }
     }
 }
 
 /// 注册脚本可调用的 write_up 或 write_down 函数。
+fn register_runtime(context: &mut Context, step_id: &str) -> Result<(), String> {
+    boa_runtime::register(
+        boa_runtime::extensions::ConsoleExtension::default(),
+        None,
+        context,
+    )
+    .map_err(|err| format!("javascriptstep[{step_id}] register runtime failed: {err}"))
+}
+
+fn run_runtime_jobs(context: &mut Context, step_id: &str, source: &str) {
+    if let Err(err) = context.run_jobs() {
+        eprintln!("javascriptstep[{step_id}] {source} jobs ignored: {err}");
+    }
+}
+
 fn register_write_function(
     context: &mut Context,
     name: &str,
@@ -170,9 +203,8 @@ fn register_write_function(
         NativeFunction::from_closure(move |_, args, context| {
             let msg = args
                 .first()
-                .map(|value| value.to_json(context))
+                .map(|value| js_value_to_json(value, context))
                 .transpose()?
-                .flatten()
                 .unwrap_or(Value::Null);
             let result = match action {
                 MsgType::Up => function_context.write_up(msg),
@@ -202,6 +234,25 @@ fn register_write_function(
         })
 }
 
+/// 将脚本返回值转换为工作流消息使用的 JSON 值。
+fn js_value_to_json(value: &JsValue, context: &mut Context) -> JsResult<Value> {
+    if let Some(object) = value.as_object() {
+        if let Ok(typed_array) = JsTypedArray::from_object(object.clone()) {
+            let length = typed_array.length(context)?;
+            let mut items = Vec::with_capacity(length);
+
+            for index in 0..length {
+                let item = typed_array.at(index as i64, context)?.to_u32(context)?;
+                items.push(Value::from(item));
+            }
+
+            return Ok(Value::Array(items));
+        }
+    }
+
+    Ok(value.to_json(context)?.unwrap_or(Value::Null))
+}
+
 /// 调用脚本中的 read_up 或 read_down 回调。
 fn call_script_reader(context: &mut Context, step_msg: &StepMsg<Value>) -> Result<(), String> {
     let reader_name = match step_msg.action {
@@ -225,4 +276,87 @@ fn call_script_reader(context: &mut Context, step_msg: &StepMsg<Value>) -> Resul
         .eval(Source::from_bytes(source.as_str()))
         .map(|_| ())
         .map_err(|err| err.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn runtime_supports_utf8_text_encoder() {
+        let mut context = Context::default();
+
+        register_runtime(&mut context, "test").expect("runtime should register");
+        context
+            .eval(Source::from_bytes(
+                r#"
+const bytes = new TextEncoder().encode("A\u4e2d\ud83d\ude00");
+if (!(bytes instanceof Uint8Array)) {
+  throw new Error("TextEncoder must return Uint8Array");
+}
+if (Array.from(bytes).join(",") !== "65,228,184,173,240,159,152,128") {
+  throw new Error("TextEncoder must encode utf-8");
+}
+if (new TextDecoder().decode(bytes) !== "A\u4e2d\ud83d\ude00") {
+  throw new Error("TextDecoder must decode utf-8");
+}
+"#,
+            ))
+            .expect("runtime should encode and decode UTF-8");
+    }
+
+    #[test]
+    fn write_value_converts_uint8array_to_json_bytes() {
+        let mut context = Context::default();
+
+        register_runtime(&mut context, "test").expect("runtime should register");
+        let value = context
+            .eval(Source::from_bytes(r#"new TextEncoder().encode("Hello")"#))
+            .expect("TextEncoder should return a value");
+        let json = js_value_to_json(&value, &mut context).expect("Uint8Array should convert");
+
+        assert_eq!(json, serde_json::json!([72, 101, 108, 108, 111]));
+    }
+
+    #[test]
+    fn runtime_runs_timeout_and_interval_callbacks() {
+        let mut context = Context::default();
+
+        register_runtime(&mut context, "test").expect("runtime should register");
+        context
+            .eval(Source::from_bytes(
+                r#"
+var timeoutCount = 0;
+var intervalCount = 0;
+setTimeout(function (value) {
+  timeoutCount += value;
+}, 1, 2);
+var intervalId = setInterval(function () {
+  intervalCount += 1;
+  if (intervalCount === 2) {
+    clearInterval(intervalId);
+  }
+}, 1);
+"#,
+            ))
+            .expect("timers should initialize");
+
+        for _ in 0..3 {
+            std::thread::sleep(Duration::from_millis(2));
+            run_runtime_jobs(&mut context, "test", "test");
+        }
+
+        context
+            .eval(Source::from_bytes(
+                r#"
+if (timeoutCount !== 2) {
+  throw new Error("setTimeout callback did not run");
+}
+if (intervalCount !== 2) {
+  throw new Error("setInterval callback did not repeat and clear");
+}
+"#,
+            ))
+            .expect("timers should run callbacks");
+    }
 }

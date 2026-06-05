@@ -52,7 +52,7 @@ export default () => {
           <Splitter.Panel style={{ height: 'calc(100vh - 100px)' }}>
             <StepFlow />
           </Splitter.Panel>
-          <Splitter.Panel defaultSize={200} min={150} max={300}>
+          <Splitter.Panel defaultSize={200} min={150} max={400}>
             <StepPar />
           </Splitter.Panel>
         </Splitter>

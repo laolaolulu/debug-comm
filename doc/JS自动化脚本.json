@@ -1,0 +1,83 @@
+{
+	"edges": [
+		{
+			"id": "xy-edge__1780664503159-1780664507320",
+			"markerEnd": {
+				"type": "arrowclosed"
+			},
+			"source": "1780664503159",
+			"target": "1780664507320"
+		}
+	],
+	"id": "1780664500449",
+	"name": "JS自动化脚本",
+	"nodes": [
+		{
+			"data": {
+				"columns": [
+					{
+						"dataIndex": "script",
+						"fieldProps": {
+							"autoSize": true
+						},
+						"initialValue": "function read_up(stepMsg) {\n  write_down(stepMsg.msg);\n}\n\nfunction read_down(stepMsg) {\n  write_up(stepMsg.msg);\n}\n",
+						"title": "JS 自动化脚本",
+						"valueType": "textarea"
+					}
+				],
+				"description": "使用 JavaScript 处理上下行消息",
+				"name": "JS 自动化脚本",
+				"script": "// 消息传递都是 Uint8Array 类型\nconst msg=(new TextEncoder()).encode(\"Hello\");\n\n// 每秒调用一次\nlet intervalId = setInterval(() => {\n  write_down(msg);\n}, 1000);"
+			},
+			"id": "1780664503159",
+			"measured": {
+				"height": 62,
+				"width": 109
+			},
+			"position": {
+				"x": 45.22131594513627,
+				"y": 32.19607946033011
+			},
+			"selected": true,
+			"type": "JavaScriptStep"
+		},
+		{
+			"data": {
+				"columns": [
+					{
+						"dataIndex": "end_flag",
+						"initialValue": "",
+						"title": "结束符(HEX)",
+						"valueType": "text"
+					},
+					{
+						"dataIndex": "host",
+						"initialValue": "127.0.0.1",
+						"title": "服务IP地址",
+						"valueType": "text"
+					},
+					{
+						"dataIndex": "port",
+						"initialValue": 502,
+						"title": "服务端口",
+						"valueType": "digit"
+					}
+				],
+				"description": "主动连接远端 TCP 服务，读取上级消息并写入连接，读到返回数据后向上级发布",
+				"name": "TCP 客户端"
+			},
+			"dragging": false,
+			"id": "1780664507320",
+			"measured": {
+				"height": 62,
+				"width": 91
+			},
+			"position": {
+				"x": 80.26640062611187,
+				"y": 151.89909209713088
+			},
+			"selected": false,
+			"type": "TcpClientStep"
+		}
+	]
+}

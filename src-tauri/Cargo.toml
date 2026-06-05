@@ -30,3 +30,4 @@ tauri-plugin-process = "2.3.1"
 serialport = "4"
 tauri-plugin-updater = { version = "2.10.1", default-features = false, features = ["native-tls", "zip"] }
 boa_engine = { version = "0.21.1", default-features = false }
+boa_runtime = { version = "0.21.1", default-features = false }
