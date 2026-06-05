@@ -873,7 +873,7 @@ dependencies = [
 
 [[package]]
 name = "debug-comm"
-version = "0.1.0-alpha.19"
+version = "0.1.1"
 dependencies = [
  "boa_engine",
  "boa_runtime",
