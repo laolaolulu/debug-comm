@@ -15,6 +15,18 @@ declare global {
     edges: Edge[];
   };
 
+  type WorkflowStartError = {
+    stepId: string;
+    stepName: string;
+    stepType: string;
+    message: string;
+  };
+
+  type WorkflowStartResult = {
+    started: boolean;
+    errors: WorkflowStartError[];
+  };
+
   // 单个 ReactFlow 节点的业务数据，必须和后端 WorkflowNodeData 保持字段语义一致。
   type WorkflowNodeData = {
     // 节点显示名称，对齐后端 WorkflowNodeData.name，右侧表单会直接编辑这个字段。

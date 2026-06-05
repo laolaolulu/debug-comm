@@ -6,7 +6,9 @@ use crate::step::model::{
 use crate::step::workflow::Workflow;
 use serde_json::Value;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tauri::async_runtime::{self, JoinHandle};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::tcp::OwnedWriteHalf;
@@ -18,6 +20,53 @@ pub struct TcpClientStep {
     running: Arc<AtomicBool>,
     writer: Arc<AsyncMutex<Option<OwnedWriteHalf>>>,
     task: Mutex<Option<JoinHandle<()>>>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::step::model::{WorkflowDefinition, WorkflowNodeData};
+    use std::collections::HashMap;
+    use std::net::TcpListener;
+
+    #[test]
+    fn new_returns_error_when_connection_fails() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("free port should bind");
+        let port = listener
+            .local_addr()
+            .expect("local address should exist")
+            .port();
+        drop(listener);
+
+        let workflow = Workflow::new_for_test(WorkflowDefinition {
+            id: "tcp-client-connect-fail".to_string(),
+            name: "TCP client connect fail".to_string(),
+            description: None,
+            nodes: Vec::new(),
+            edges: Vec::new(),
+        });
+        let node = WorkflowNode {
+            id: "tcp-client".to_string(),
+            r#type: "TcpClientStep".to_string(),
+            data: WorkflowNodeData {
+                name: "TCP Client".to_string(),
+                description: String::new(),
+                columns: Vec::new(),
+                params: HashMap::from([
+                    ("end_flag".to_string(), Value::String(String::new())),
+                    ("host".to_string(), Value::String("127.0.0.1".to_string())),
+                    ("port".to_string(), Value::from(port)),
+                ]),
+            },
+        };
+
+        let error = match TcpClientStep::new(&node, workflow) {
+            Ok(_) => panic!("connection should fail"),
+            Err(error) => error,
+        };
+
+        assert!(error.contains("connect 127.0.0.1"));
+    }
 }
 
 impl TcpClientStep {
@@ -43,12 +92,21 @@ impl TcpClientStep {
         let running = Arc::clone(&step.running);
         let context_for_task = step.context.clone();
         let writer_for_task = Arc::clone(&step.writer);
+        let (init_tx, init_rx) = mpsc::channel::<Result<(), String>>();
         let task = async_runtime::spawn(async move {
-            let Ok(stream) = TcpStream::connect(&address).await else {
-                return;
+            let stream = match TcpStream::connect(&address).await {
+                Ok(stream) => stream,
+                Err(err) => {
+                    let _ = init_tx.send(Err(format!("connect {address} failed: {err}")));
+                    return;
+                }
             };
+
             let (mut reader, writer) = stream.into_split();
             *writer_for_task.lock().await = Some(writer);
+            if init_tx.send(Ok(())).is_err() {
+                return;
+            }
 
             let mut read_buffer = vec![0_u8; 1024];
             let mut packet_buffer = Vec::<u8>::new();
@@ -74,6 +132,22 @@ impl TcpClientStep {
 
             *writer_for_task.lock().await = None;
         });
+
+        match init_rx.recv_timeout(Duration::from_secs(2)) {
+            Ok(Ok(())) => {}
+            Ok(Err(err)) => {
+                task.abort();
+                return Err(err);
+            }
+            Err(RecvTimeoutError::Timeout) => {
+                task.abort();
+                return Err(format!("connect {host}:{port} failed: timed out"));
+            }
+            Err(RecvTimeoutError::Disconnected) => {
+                task.abort();
+                return Err(format!("connect {host}:{port} failed: task stopped"));
+            }
+        }
 
         if let Ok(mut current_task) = step.task.lock() {
             *current_task = Some(task);

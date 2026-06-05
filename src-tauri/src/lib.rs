@@ -1,21 +1,19 @@
 pub mod step;
 
 use step::model::{StepManifest, WorkflowDefinition};
-use step::workflow::Workflow;
+use step::workflow::{Workflow, WorkflowStartResult};
 use tauri::AppHandle;
 
 /// 启动工作流。
 #[tauri::command]
-fn start_workflow(json: &str, app: AppHandle) -> Result<(), String> {
+fn start_workflow(json: &str, app: AppHandle) -> Result<WorkflowStartResult, String> {
     let definition =
         serde_json::from_str::<WorkflowDefinition>(json).map_err(|err| err.to_string())?;
 
     Workflow::remove(&definition.id);
 
     let workflow = Workflow::new_with_app(definition, app);
-    workflow.run()?;
-
-    Ok(())
+    workflow.run()
 }
 
 /// 停止工作流。

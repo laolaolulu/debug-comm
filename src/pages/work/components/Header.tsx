@@ -14,6 +14,28 @@ import {
 import { useActiveTabStore } from '../../../models/activeTab';
 import { useWorkrunStore } from '../../../models/workrun';
 
+const renderStartErrors = (errors: WorkflowStartError[]) => (
+  <div style={{ maxHeight: 360, overflow: 'auto' }}>
+    <FormattedMessage
+      id='work.startErrors.description'
+      defaultMessage='The following nodes failed to start:'
+    />
+    <ul style={{ margin: '8px 0 0', paddingLeft: 20 }}>
+      {errors.map((error) => (
+        <li key={error.stepId} style={{ marginBottom: 8 }}>
+          <div>
+            <strong>{error.stepName}</strong>
+            <span>{` (${error.stepType}, ${error.stepId})`}</span>
+          </div>
+          <div style={{ color: '#cf1322', wordBreak: 'break-word' }}>
+            {error.message}
+          </div>
+        </li>
+      ))}
+    </ul>
+  </div>
+);
+
 // 渲染工作台头部操作栏。
 export default () => {
   const { message, modal } = App.useApp();
@@ -56,17 +78,85 @@ export default () => {
             type='primary'
             onClick={async () => {
               try {
-                await invoke<void>('start_workflow', {
+                const result = await invoke<WorkflowStartResult>('start_workflow', {
                   json: JSON.stringify(select),
                 });
-                addRunning(select.id);
-                message.success(
-                  <FormattedMessage
-                    id='work.message.started'
-                    defaultMessage='任务已启动：{workflowId}'
-                    values={{ workflowId: select.id }}
-                  />,
-                );
+                if (result.errors.length === 0) {
+                  if (result.started) {
+                    addRunning(select.id);
+                    message.success(
+                      <FormattedMessage
+                        id='work.message.started'
+                        defaultMessage='Task started: {workflowId}'
+                        values={{ workflowId: select.id }}
+                      />,
+                    );
+                  } else {
+                    message.error(
+                      <FormattedMessage
+                        id='work.message.noStartedNode'
+                        defaultMessage='No node was started'
+                      />,
+                    );
+                  }
+                  return;
+                }
+
+                if (!result.started) {
+                  modal.error({
+                    title: (
+                      <FormattedMessage
+                        id='work.startErrors.failedTitle'
+                        defaultMessage='Task start failed'
+                      />
+                    ),
+                    content: renderStartErrors(result.errors),
+                  });
+                  return;
+                }
+
+                const confirmed = await modal.confirm({
+                  title: (
+                    <FormattedMessage
+                      id='work.startErrors.confirmTitle'
+                      defaultMessage='Some nodes failed to start. Continue?'
+                    />
+                  ),
+                  content: renderStartErrors(result.errors),
+                  okText: (
+                    <FormattedMessage
+                      id='work.startErrors.continue'
+                      defaultMessage='Continue'
+                    />
+                  ),
+                  cancelText: (
+                    <FormattedMessage
+                      id='work.startErrors.stop'
+                      defaultMessage='No'
+                    />
+                  ),
+                });
+
+                if (confirmed) {
+                  addRunning(select.id);
+                  message.success(
+                    <FormattedMessage
+                      id='work.message.startedWithErrors'
+                      defaultMessage='Task started with some failed nodes: {workflowId}'
+                      values={{ workflowId: select.id }}
+                    />,
+                  );
+                } else {
+                  await invoke('stop_workflow', { id: select.id });
+                  removeRunning(select.id);
+                  message.success(
+                    <FormattedMessage
+                      id='work.message.startCancelled'
+                      defaultMessage='Task ended: {workflowId}'
+                      values={{ workflowId: select.id }}
+                    />,
+                  );
+                }
               } catch (error) {
                 message.error(String(error));
               }

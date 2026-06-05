@@ -21,10 +21,72 @@ fn workflow_instances() -> &'static WorkflowRegistry {
     WORKFLOW_INSTANCES.get_or_init(|| RwLock::new(HashMap::new()))
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::step::model::WorkflowNodeData;
+
+    fn unsupported_node(id: &str, name: &str, step_type: &str) -> WorkflowNode {
+        WorkflowNode {
+            id: id.to_string(),
+            r#type: step_type.to_string(),
+            data: WorkflowNodeData {
+                name: name.to_string(),
+                description: String::new(),
+                columns: Vec::new(),
+                params: HashMap::new(),
+            },
+        }
+    }
+
+    #[test]
+    fn run_collects_all_node_start_errors() {
+        let workflow = Workflow::new_for_test(WorkflowDefinition {
+            id: "collect-start-errors".to_string(),
+            name: "Collect start errors".to_string(),
+            description: None,
+            nodes: vec![
+                unsupported_node("node-a", "Node A", "MissingStepA"),
+                unsupported_node("node-b", "Node B", "MissingStepB"),
+            ],
+            edges: Vec::new(),
+        });
+
+        let result = workflow
+            .run()
+            .expect("workflow run should return a start result");
+
+        assert!(!result.started);
+        assert_eq!(result.errors.len(), 2);
+        assert_eq!(result.errors[0].step_id, "node-a");
+        assert_eq!(result.errors[0].step_name, "Node A");
+        assert_eq!(result.errors[1].step_id, "node-b");
+        assert_eq!(result.errors[1].step_name, "Node B");
+        assert!(!Workflow::list_ids().contains(&"collect-start-errors".to_string()));
+    }
+}
+
 pub struct Workflow {
     pub workflow: WorkflowDefinition,
     steps: RwLock<HashMap<String, Arc<dyn BaseStep>>>,
     app: Option<AppHandle>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct WorkflowStartError {
+    #[serde(rename = "stepId")]
+    pub step_id: String,
+    #[serde(rename = "stepName")]
+    pub step_name: String,
+    #[serde(rename = "stepType")]
+    pub step_type: String,
+    pub message: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct WorkflowStartResult {
+    pub started: bool,
+    pub errors: Vec<WorkflowStartError>,
 }
 
 impl Workflow {
@@ -49,24 +111,48 @@ impl Workflow {
         })
     }
 
+    #[cfg(test)]
+    pub fn new_for_test(workflow: WorkflowDefinition) -> Arc<Self> {
+        Arc::new(Self {
+            workflow,
+            steps: RwLock::new(HashMap::new()),
+            app: None,
+        })
+    }
+
     /// 按拓扑顺序实例化并启动工作流中的所有步骤。
-    pub fn run(self: &Arc<Self>) -> Result<(), String> {
+    pub fn run(self: &Arc<Self>) -> Result<WorkflowStartResult, String> {
         let sorted_nodes = self.sort_node_indices();
         let mut steps = HashMap::<String, Arc<dyn BaseStep>>::new();
+        let mut errors = Vec::<WorkflowStartError>::new();
 
         for node_index in sorted_nodes {
             let node = &self.workflow.nodes[node_index];
-            let step = self.instantiate_step(node)?;
-            steps.insert(node.id.clone(), step);
+            match self.instantiate_step(node) {
+                Ok(step) => {
+                    steps.insert(node.id.clone(), step);
+                }
+                Err(message) => {
+                    errors.push(WorkflowStartError {
+                        step_id: node.id.clone(),
+                        step_name: node.data.name.clone(),
+                        step_type: node.r#type.clone(),
+                        message,
+                    });
+                }
+            }
         }
 
+        let started = !steps.is_empty();
         if let Ok(mut current_steps) = self.steps.write() {
             current_steps.clear();
             current_steps.extend(steps);
         }
-        self.register_running();
+        if started {
+            self.register_running();
+        }
 
-        Ok(())
+        Ok(WorkflowStartResult { started, errors })
     }
 
     /// 清空当前步骤实例，让后台任务和连接随步骤释放。
